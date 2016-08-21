@@ -9,6 +9,7 @@ import ntpath
 import tarfile
 import datetime
 import time
+import getpass
 import zipfile
 try:
     import zlib
@@ -16,49 +17,13 @@ try:
 except:
     compression = zipfile.ZIP_STORED
 
-# == globals ==========================================
-backupentry = {}
-target = {}
-
-G_EXCLUDE_ENDINGS = ['~', 'gif']
-G_EXCLUDE_FILES = ['Thumbs.db', 'faja.txt']
-G_EXCLUDE_DIRECTORIES = ['myexldirg']
-
-C_EXCLUDE_ENDINGS = []
-C_EXCLUDE_FILES = []
-C_EXCLUDE_DIRECTORIES = []
+import ConfigHandler
 
 
-# == methods =========================================
-
-# get filename only from path
 def path_leaf(path):
+    """ get filename only from path """
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
-
-
-# filter function for tar creation - general and custom
-def filter_general(tarinfo):
-    if tarinfo.name.endswith(tuple(G_EXCLUDE_ENDINGS)):
-        return None
-    elif tarinfo.name.endswith(tuple(C_EXCLUDE_ENDINGS)):
-        return None
-    elif path_leaf(tarinfo.name) in G_EXCLUDE_FILES:
-        return None
-    elif path_leaf(tarinfo.name) in C_EXCLUDE_FILES:
-        return None
-    elif path_leaf(tarinfo.name) in G_EXCLUDE_DIRECTORIES:
-        return None
-    elif path_leaf(tarinfo.name) in C_EXCLUDE_DIRECTORIES:
-        return None
-    else:
-        return tarinfo
-
-
-def getTime():
-    now = datetime.datetime.now()
-    nowstr = '[%02d:%02d:%02d]' % (now.hour, now.minute, now.second)
-    return nowstr
 
 
 def getDate():
@@ -67,129 +32,198 @@ def getDate():
     return nowstr
 
 
-def compress_pre(t, bobject):
-    filepath = os.path.join(t['path'], bobject['filename'])
-    print(getTime()+" [Compressing (%s)] '%s' -> %s" % (bobject['method'], bobject['pathcompress'], filepath))
-    if os.path.isfile(filepath):
-        print('  [Skipping] There is already an archive with this name: %s' % filepath)
-        return False
-    return True
+def getTime():
+    now = datetime.datetime.now()
+    nowstr = '[%02d:%02d:%02d]' % (now.hour, now.minute, now.second)
+    return nowstr
 
 
-# == tar, tar.gz =======
-def compress_tar(t, bobject):
-    filepath = os.path.join(t['path'], bobject['filename'])
-    try:
-        mode = ""
-        if bobject['method'] == "tar":
-            mode = "w"
-        elif bobject['method'] == "targz":
-            mode = "w:gz"
+class Backupy:
+    """ Backupy class """
+    def __init__(self):
+        self.home_path = os.path.expanduser("~")
+        self.path_configdir = self.home_path + '/.config/backupy'
+        self.path_config_global = self.path_configdir + '/globals.cfg'
+        self.path_config_entry_list = []
+
+        self.config_global = ConfigHandler.getGlobalConfigs(self.path_config_global)
+        self.configs_user = {}
+
+        self.cfg_actual = ''
+
+
+    def firstRun(self):
+        if not os.path.exists(self.home_path):
+            print("Can not access home directory: %s" % self.home_path)
+            sys.exit(1)
+
+        if not os.path.exists(self.path_configdir):
+            try:
+                os.mkdir(self.path_configdir)
+            except OSError as err:
+                print("Cannot create user config dir: %s" % self.path_configdir)
+                print("Error: %s" % err.strerror)
+                sys.exit(1)
+
+        if not os.path.exists(self.path_config_global):
+            print("First run: generating global configs: %s" % self.path_config_global)
+            try:
+                fhg = open(self.path_config_global, "w")
+                fhg.write("[BACKUPY_GLOBALS]\n\
+    EXCLUDE_ENDINGS = .bak, .swp\n\
+    EXCLUDE_FILES = Thumbs.db, faja.txt\n\
+    EXCLUDE_DIRS = myexcldirg_global")
+                fhg.close()
+            except OSError as err:
+                print("Cannot create global config: %s" % self.path_config_global)
+                print("Error: %s" % err.strerror)
+                sys.exit(1)
+
+    def getConfigList(self, dirname):
+        files = [os.path.join(dirname, f) for f in os.listdir(dirname) if os.path.isfile(os.path.join(dirname, f)) and f not in 'globals.cfg']
+        return files
+
+    def filter_general(self, tarinfo):
+        """ filter function for tar creation - general and custom """
+        # TODO: double check this!!
+        if tarinfo.name.endswith(tuple(self.config_global['exclude_endings'])):
+            return None
+        elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
+            return None
+
+        elif path_leaf(tarinfo.name) in self.config_global['exclude_files']:
+            return None
+        elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
+            return None
+
+        elif path_leaf(tarinfo.name) in self.config_global['exclude_dirs']:
+            return None
+        elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
+            return None
         else:
-            print("Wrong tar compress method. Exiting..")
-            exit(4)
+            return tarinfo
 
-        archive = tarfile.open(filepath, mode)
-        if bobject['withoutpath'] == 'no':
-            archive.add(bobject['pathcompress'], filter=filter_general)
-        elif bobject['withoutpath'] == 'yes':
-            archive.add(bobject['pathcompress'], arcname=os.path.basename(bobject['pathcompress']), filter=filter_general)
+
+    def compress_pre(self, path_target_dir, bckentry):
+        """" Checks and prints backup entry processing """
+        filepath = os.path.join(path_target_dir, bckentry['filename'])
+        bckentry['archivefullpath'] = filepath
+        print(getTime() +" [Compressing (%s)] %s" % (bckentry['method'], filepath))
+        if os.path.isfile(filepath):
+            print('  [Skipping] There is already an archive with this name: %s' % filepath)
+            return False
+        return True
+
+    def compress_tar(self, bckentry):
+        """ Compressing with tar/targz method """
+        filepath = bckentry['archivefullpath']
+        try:
+            mode = ""
+            if bckentry['method'] == "tar":
+                mode = "w"
+            elif bckentry['method'] == "targz":
+                mode = "w:gz"
+            else:
+                print("Wrong tar compress method. Exiting..")
+                exit(4)
+
+            archive = tarfile.open(filepath, mode)
+            if bckentry['withoutpath'] == 'no':
+                for entry in bckentry['include_dir']:
+                    archive.add(entry, filter=self.filter_general)
+            elif bckentry['withoutpath'] == 'yes':
+                for entry in bckentry['include_dir']:
+                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
+            else:
+                print("Wrong 'filepath' value! Exiting.")
+                exit(2)
+        except (IOError, OSError) as err:
+            print("  [IOError/OSError] %s" % err.strerror)
+            if err[0] == errno.EACCES:
+                print("  [Skipping] Can't write to this file: %s" % filepath)
+            elif err[0] == errno.ENOSPC:
+                print("  [Exiting!]")
+                exit(3)
+            else:
+                print("  [Previous exception is unhandled]")
+            if err[0] == errno.ENOENT:
+                print("  [Skipping] No such file or directory to compress: %s" % bckentry['pathcompress'])
+                exit(4)
+            else:
+                print("  [Unhandled other OSError] %s]" % err.strerror)
         else:
-            print("Wrong 'filepath' value! Exiting.")
-            exit(2)
-    except IOError as err:
-        print("  [IOError] %s" % err.strerror)
-        if err[0] == errno.EACCES:
-            print("  [Skipping] Can't write to this file: %s" % filepath)
-        elif err[0] == errno.ENOSPC:
-            print("  [Exiting!]")
-            exit(3)
+            archive.close()
+            filesize = os.path.getsize(filepath)
+            print(" [Done] [%s KBytes]" % round(filesize/1024, 0))
+
+    def compress_zip(self, t, bobject):
+        """ Compressing with zip method """
+        dirpath = bobject['pathcompress'] + "/*"
+        filepath = os.path.join(t['path'], bobject['filename'])
+
+        try:
+            archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
+            archive.comment = bobject['description']
+            archive.write(dirpath, compress_type=compression)
+        except (IOError, OSError) as err:
+            print("  [IOError] %s" % err.strerror)
+            if err[0] == errno.EACCES:
+                print("  [Skipping] Can't write to this file: %s" % filepath)
+            elif err[0] == errno.ENOSPC:
+                print("  [Exiting!]")
+                exit(3)
+            else:
+                print("  [Previous exception is unhandled]")
+            if err[0] == errno.ENOENT:
+                print("  [Skipping] No such file or directory to compress: %s" % dirpath)
+                exit(4)
+            else:
+                print("  [Unhandled other OSError] %s]" % err.strerror)
         else:
-            print("  [Previous exception is unhandled]")
-    except OSError as err:
-        if err[0] == errno.ENOENT:
-            print("  [Skipping] No such file or directory to compress: %s" % bobject['pathcompress'])
-            exit(4)
-        else:
-            print("  [Unhandled other OSError] %s]" % err.strerror)
-    else:
-        archive.close()
-        filesize = os.path.getsize(filepath)
-        print(" [Done] [%s KBytes]" % (filesize/1024))
+            archive.close()
+            filesize = os.path.getsize(filepath)
+            print(" [Done] [%s KBytes]" % (round(filesize/1024, 1)))
 
+    def init(self):
+        print("backupy 0.1")
+        self.firstRun()
+        print("%s Starting backup" % getTime())
 
-# == zip ===============
-def compress_zip(t, bobject):
-    dirpath = bobject['pathcompress'] + "/*"
-    filepath = os.path.join(t['path'], bobject['filename'])
+        # Create user backup config file list
+        self.path_config_entry_list = self.getConfigList(self.path_configdir)
 
-    try:
-        archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
-        archive.comment = bobject['description']
-        archive.write(dirpath, compress_type=compression)
-    except IOError as err:
-        print("  [IOError] %s" % err.strerror)
-        if err[0] == errno.EACCES:
-            print("  [Skipping] Can't write to this file: %s" % filepath)
-        elif err[0] == errno.ENOSPC:
-            print("  [Exiting!]")
-            exit(3)
-        else:
-            print("  [Previous exception is unhandled]")
-    except OSError as err:
-        if err[0] == errno.ENOENT:
-            print("  [Skipping] No such file or directory to compress: %s" % dirpath)
-            exit(4)
-        else:
-            print("  [Unhandled other OSError] %s]" % err.strerror)
-    else:
-        archive.close()
-        filesize = os.path.getsize(filepath)
-        print(" [Done] [%s KBytes]" % (filesize/1024))
+        # Read user backup config files in iteration
+        for cfpath in self.path_config_entry_list:
+            leaf = path_leaf(cfpath)
+            self.configs_user[leaf] = ConfigHandler.getBackupConfigs(cfpath)
+            self.configs_user[leaf]['archivefullpath'] = 'replace_this'
+            if self.configs_user[leaf]['method'] == 'tar':
+                self.configs_user[leaf]['filename'] += '_' + getDate() + '.tar'
+            if self.configs_user[leaf]['method'] == 'targz':
+                self.configs_user[leaf]['filename'] += '_' + getDate() + '.tar.gz'
+            if self.configs_user[leaf]['method'] == 'zip':
+                self.configs_user[leaf]['filename'] += '_' + getDate() + '.zip'
 
+    def execute_backups(self):
+        for cfname, cfentry in self.configs_user.items():
+            self.cfg_actual = cfname
+            mode = cfentry['method']
 
-def init():
-    print("[backupy 0.1] %s" % getDate())
-    print("%s [Starting backup]" % getTime())
-
-    backupentry.update({'description'        : 'temp backup'})
-    backupentry.update({'method'             : 'zip'})
-    backupentry.update({'withoutpath'        : 'no'})
-    backupentry.update({'filename'           : 'temp'})
-    backupentry.update({'pathcompress'       : '/home/kaktusz/temp/dl'})
-    backupentry.update({'followsym'          : 'yes'})
-    backupentry.update({'exclude_endings'    : list(['~', 'gif'])})
-    backupentry.update({'exclude_files'      : list(['ize.log', 'faja.txt'])})
-    backupentry.update({'exclude_directories': list(['/home/kaktusz/temp/dl/myexldirc'])})
-    backupentry.update({'include_directories': ''})
-
-    if backupentry['method'] == 'tar':
-        backupentry['filename'] += '_' + getDate() + '.tar'
-    if backupentry['method'] == 'targz':
-        backupentry['filename'] += '_' + getDate() + '.tar.gz'
-    if backupentry['method'] == 'zip':
-        backupentry['filename'] += '_' + getDate() + '.zip'
-
-    target.update({'path': '/home/kaktusz/temp/backuptest'})
-
-    # fill current exclude lists
-    C_EXCLUDE_ENDINGS.extend(list(backupentry['exclude_endings']))
-    C_EXCLUDE_FILES.extend(backupentry['exclude_files'])
-    C_EXCLUDE_DIRECTORIES.extend(backupentry['exclude_directories'])
+            if self.compress_pre(cfentry['resultpath'], cfentry):
+                if mode == "tar" or mode == "targz":
+                    self.compress_tar(cfentry)
+                # elif mode == "zip":
+                #     compress_zip(target, backupentry)
+                else:
+                    print("Wrong method type. Exiting.")
+                    exit(1)
 
 
 def main():
-    init()
+    backupy = Backupy()
+    backupy.init()
+    backupy.execute_backups()
 
-    mode = backupentry['method']
-    if compress_pre(target, backupentry):
-        if mode == "tar" or mode == "targz:":
-            compress_tar(target, backupentry)
-        elif mode == "zip":
-            compress_zip(target, backupentry)
-        else:
-            print("Wrong method type. Exiting.")
-            exit(1)
 
 if __name__ == '__main__':
     # sys.exit(main(sys.argv[1]))
