@@ -108,9 +108,9 @@ class Backupy:
         """" Checks and prints backup entry processing """
         filepath = os.path.join(path_target_dir, bckentry['filename'])
         bckentry['archivefullpath'] = filepath
-        print(getTime() +" [Compressing (%s)] %s" % (bckentry['method'], filepath))
+        print(getTime() +" Compressing (%s) %s" % (bckentry['method'], filepath))
         if os.path.isfile(filepath):
-            print('  [Skipping] There is already an archive with this name: %s' % filepath)
+            print(getTime() + " Skipping. There is already an archive with this name: %s" % filepath)
             return False
         return True
 
@@ -124,7 +124,7 @@ class Backupy:
             elif bckentry['method'] == "targz":
                 mode = "w:gz"
             else:
-                print("Wrong tar compress method. Exiting..")
+                print(getTime() + " Wrong tar compress method. Exiting..")
                 exit(4)
 
             archive = tarfile.open(filepath, mode)
@@ -135,26 +135,26 @@ class Backupy:
                 for entry in bckentry['include_dir']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
-                print("Wrong 'filepath' value! Exiting.")
+                print(getTime() + " Wrong 'filepath' value! Exiting.")
                 exit(2)
         except (IOError, OSError) as err:
             print("  [IOError/OSError] %s" % err.strerror)
             if err[0] == errno.EACCES:
-                print("  [Skipping] Can't write to this file: %s" % filepath)
+                print(getTime() + " Skipping. Can't write to this file: %s" % filepath)
             elif err[0] == errno.ENOSPC:
                 print("  [Exiting!]")
                 exit(3)
             else:
-                print("  [Previous exception is unhandled]")
+                print(getTime() + " Previous exception was unhandled")
             if err[0] == errno.ENOENT:
-                print("  [Skipping] No such file or directory to compress: %s" % bckentry['pathcompress'])
+                print(getTime() + " Skipping. No such file or directory to compress: %s" % bckentry['pathcompress'])
                 exit(4)
             else:
                 print("  [Unhandled other OSError] %s]" % err.strerror)
         else:
             archive.close()
             filesize = os.path.getsize(filepath)
-            print(" [Done] [%s KBytes]" % round(filesize/1024, 0))
+            print(getTime() + " Done [%s KBytes]" % round(filesize/1024, 0))
 
     def compress_zip(self, t, bobject):
         """ Compressing with zip method """
@@ -168,21 +168,21 @@ class Backupy:
         except (IOError, OSError) as err:
             print("  [IOError] %s" % err.strerror)
             if err[0] == errno.EACCES:
-                print("  [Skipping] Can't write to this file: %s" % filepath)
+                print(getTime() + " Skipping. Can't write to this file: %s" % filepath)
             elif err[0] == errno.ENOSPC:
                 print("  [Exiting!]")
                 exit(3)
             else:
                 print("  [Previous exception is unhandled]")
             if err[0] == errno.ENOENT:
-                print("  [Skipping] No such file or directory to compress: %s" % dirpath)
+                print(getTime() +" Skipping. No such file or directory to compress: %s" % dirpath)
                 exit(4)
             else:
-                print("  [Unhandled other OSError] %s]" % err.strerror)
+                print(getTime() +" Unhandled other OSError: %s" % err.strerror)
         else:
             archive.close()
             filesize = os.path.getsize(filepath)
-            print(" [Done] [%s KBytes]" % (round(filesize/1024, 1)))
+            print(getTime() + " Done. [%s KBytes]" % (round(filesize/1024, 1)))
 
     def init(self):
         print("backupy 0.1")

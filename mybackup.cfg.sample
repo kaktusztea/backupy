@@ -1,0 +1,11 @@
+[backupentry]
+NAME = Document backup
+FILENAME = document_backup
+RESULTPATH = /home/friedrich/mybackups
+METHOD = targz
+FOLLOWSYM = yes
+WITHOUTPATH = yes
+INCLUDE_DIR = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels
+EXCLUDE_DIRS = garbage, temp
+EXCLUDE_ENDINGS = ~, gif, jpg, bak
+EXCLUDE_FILES = abc.log, Thumbs.db

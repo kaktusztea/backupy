@@ -24,16 +24,18 @@ def getBackupConfigs(configfile):
         bconfig['withoutpath'] = conffile.get('backupentry', 'WITHOUTPATH', raw=False)
 
         ll = conffile.get('backupentry', 'INCLUDE_DIR', raw=False)
-        bconfig['include_dir'] = ll.split(',')
+        bconfig['include_dir'] = list(map(str.strip, ll.split(',')))
+        # map(str.strip, bconfig['include_dir'])
 
         ll = conffile.get('backupentry', 'EXCLUDE_DIRS', raw=False)
-        bconfig['exclude_dirs'] = ll.split(',')
+        bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
 
         ll = conffile.get('backupentry', 'EXCLUDE_ENDINGS', raw=False)
-        bconfig['exclude_endings'] = ll.split(',')
+        bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
 
         ll = conffile.get('backupentry', 'EXCLUDE_FILES', raw=False)
-        bconfig['exclude_files'] = ll.split(',')
+        bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+
     except (configparser.NoSectionError, configparser.NoOptionError) as err:
         print("Error in config file: %s" % configfile)
         print("Error: %s" % err.message)
