@@ -37,9 +37,9 @@ def getBackupConfigs(configfile):
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
     except (configparser.NoSectionError, configparser.NoOptionError) as err:
-        print("Error in config file: %s" % configfile)
+        print("Invalid config file: %s" % configfile)
         print("Error: %s" % err.message)
-
+        sys.exit(1)
     return bconfig
 
 
