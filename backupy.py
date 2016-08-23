@@ -3,6 +3,7 @@
 
 __author__ = 'kaktusz'
 import os
+import re
 import sys
 import errno
 import ntpath
@@ -135,12 +136,18 @@ class Backupy:
                 printLog("Error: %s" % err.strerror)
                 sys.exit(1)
 
+            printLog("---------------------------------------------------------------")
             printLog("Now you can create user specified backup entries in %s" % self.path_configdir)
-            printLog("User backup config files' extension should be .cfg")
+            printLog("Copy sample file above as many times as you want and customize!")
+            printLog("Important: User backup config files' extension should be .cfg")
             sys.exit(0)
 
     def getConfigList(self, dirname):
-        files = [os.path.join(dirname, f) for f in os.listdir(dirname) if os.path.isfile(os.path.join(dirname, f)) and f not in 'globals.cfg']
+        filter = ['globals.cfg', '.sample']
+        # files = [os.path.join(dirname, f) for f in os.listdir(dirname) if os.path.isfile(os.path.join(dirname, f)) and f not in 'globals.cfg']
+        files = [os.path.join(dirname, f) for f in os.listdir(dirname)
+                 if os.path.isfile(os.path.join(dirname, f))
+                 and not any(f.endswith(ext) for ext in filter)]
         return files
 
     def filter_general(self, tarinfo):
@@ -173,6 +180,7 @@ class Backupy:
             printLog("Skipping")
             return False
         else:
+            printLog("Executing backup task: \"%s\"" % bckentry['name'])
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
         return True
@@ -187,8 +195,9 @@ class Backupy:
             elif bckentry['method'] == "targz":
                 mode = "w:gz"
             else:
-                printLog("Wrong tar compress method (%s). Exiting.." % bckentry['method'])
-                exit(4)
+                printLog("Error: wrong tar compress method (%s)." % bckentry['method'])
+                printLog("Exiting")
+                exit(1)
 
             archive = tarfile.open(filepath, mode)
             if bckentry['withoutpath'] == 'no':
@@ -253,6 +262,12 @@ class Backupy:
         # Create user backup config file list
         self.config_global = ConfigHandler.getGlobalConfigs(self.path_config_global)
         self.path_config_entry_list = self.getConfigList(self.path_configdir)
+        if not self.path_config_entry_list:
+            printLog("---------------------------------------------------------------")
+            printLog("You don't have any user backup config in %s" % self.path_configdir)
+            printLog("Copy sample file there - as many times as you want - and customize!")
+            printLog("Important: User backup config files' extension should be .cfg")
+            sys.exit(1)
 
         # Read user backup config files in iteration
         for cfpath in self.path_config_entry_list:

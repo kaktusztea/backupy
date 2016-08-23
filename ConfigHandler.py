@@ -40,6 +40,7 @@ def getBackupConfigs(configfile):
         print("Invalid config file: %s" % configfile)
         print("Error: %s" % err.message)
         sys.exit(1)
+    # TODO: check if FILENAME is unique in list
     return bconfig
 
 
