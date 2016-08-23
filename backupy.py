@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__author__ = 'kaktusz'
 import os
 import sys
 import errno
@@ -14,8 +13,9 @@ try:
     compression = zipfile.ZIP_DEFLATED
 except:
     compression = zipfile.ZIP_STORED
-
 import ConfigHandler
+
+__author__ = 'kaktusz'
 
 
 def checkPythonVersion():
@@ -25,6 +25,7 @@ def checkPythonVersion():
         printLog("Minimum python version: 3.4")
         printLog("Exiting")
         sys.exit(1)
+
 
 def path_leaf(path):
     """ get filename only from path """
@@ -204,6 +205,7 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
                 printLog("Exiting")
                 sys.exit(1)
 
+            # TODO: Implement "follow symlinks" option!
             archive = tarfile.open(filepath, mode)
             if bckentry['withoutpath'] == 'no':
                 for entry in bckentry['include_dirs']:
@@ -212,9 +214,8 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
                 for entry in bckentry['include_dirs']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
-                printLog("Wrong 'filepath' value!")
-                printLog("Exiting")
-                sys.exit(1)        # TODO: only skipping!
+                printLog("Wrong 'withoutpath' config value! Should be \"YES\" / \"NO\". Exiting.")
+                sys.exit(1)
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
                 # printLog("OSError: Permission denied on %s" % filepath)
