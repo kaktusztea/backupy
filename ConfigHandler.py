@@ -44,9 +44,6 @@ def getBackupConfigs(configfile):
 
 
 def getGlobalConfigs(globalconfig):
-    if not os.path.exists(globalconfig):
-        print("Global config file does not exists.")
-        sys.exit(1)
     bconfig = {}
     conffile = configparser.ConfigParser()
     try:
@@ -64,4 +61,5 @@ def getGlobalConfigs(globalconfig):
     except configparser.NoSectionError as err:
         print("Global config file syntax error: %s" % globalconfig)
         print("Error: %s" % err.message)
+        sys.exit(1)
     return bconfig

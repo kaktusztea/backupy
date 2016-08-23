@@ -20,6 +20,14 @@ except:
 import ConfigHandler
 
 
+def checkPythonVersion():
+    try:
+        assert sys.version_info >= (3, 4)
+    except AssertionError as err:
+        printLog("Minimum python version: 3.4")
+        printLog("Exiting")
+        sys.exit(1)
+
 def path_leaf(path):
     """ get filename only from path """
     head, tail = ntpath.split(path)
@@ -45,6 +53,11 @@ def getTimeShort():
     return nowstr
 
 
+def printLog(log):
+    pp = getTime() + " " + str(log)
+    print(pp)
+
+
 def sizeof_fmt(num, suffix='B'):
     for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
         if abs(num) < 1024.0:
@@ -61,28 +74,34 @@ class Backupy:
         self.path_config_global = self.path_configdir + '/globals.cfg'
         self.path_config_entry_list = []
 
-        self.config_global = ConfigHandler.getGlobalConfigs(self.path_config_global)
+        self.config_global = ""
         self.configs_user = {}
-
         self.cfg_actual = ''
 
+        self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
+
+
+    def getoserrorcode(self, errstr):
+        code = [i for i, v in enumerate(self.oserrorcodes) if v[0] == errstr]
+        return code[0]
 
     def firstRun(self):
         if not os.path.exists(self.home_path):
-            print("%s Can not access home directory: %s" % (getTime(), self.home_path))
+            printLog("Can not access home directory: %s" % self.home_path)
             sys.exit(1)
 
         if not os.path.exists(self.path_configdir):
             try:
                 os.mkdir(self.path_configdir)
             except OSError as err:
-                print("%s Cannot create user config dir: %s" % (getTime(), self.path_configdir))
-                print("%s Error: %s" % (getTime(), err.strerror))
+                printLog("Cannot create user config dir: %s" % self.path_configdir)
+                printLog("Error: %s" % err.strerror)
                 sys.exit(1)
 
         if not os.path.exists(self.path_config_global):
-            print("%s First run!") % (getTime())
-            print("%s Generating global configs: %s" % (getTime(), self.path_config_global))
+            samplecfgfile = self.path_configdir + "/mybackup.cfg.sample"
+            printLog("First run!")
+            printLog("Generating global configs: %s" % self.path_config_global)
             try:
                 fhg = open(self.path_config_global, "w")
                 fhg.write("[BACKUPY_GLOBALS]\n\
@@ -90,12 +109,34 @@ class Backupy:
     EXCLUDE_FILES = Thumbs.db, faja.txt\n\
     EXCLUDE_DIRS = myexcldirg_global")
                 fhg.close()
+                del fhg
             except OSError as err:
-                print("%s Cannot create global config: %s" % (getTime(), self.path_config_global))
-                print("%s Error: %s" % (getTime(), err.strerror))
+                printLog("Cannot create global config: %s" % self.path_config_global)
+                printLog("Error: %s" % err.strerror)
                 sys.exit(1)
-            print("%s Generation complete. " % getTime())
-            print("%s Now you can create user specified backup entries in %s" % (getTime(), self.path_configdir))
+
+            printLog("Generating sample backup config: %s" % samplecfgfile)
+            try:
+                fhg = open(samplecfgfile, "w")
+                fhg.write("[backupentry]\n\
+    NAME = Document backup\n\
+    FILENAME = document_backup\n\
+    RESULTPATH = /home/friedrich/mybackups\n\
+    METHOD = targz\n\
+    FOLLOWSYM = yes\n\
+    WITHOUTPATH = yes\n\
+    INCLUDE_DIR = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
+    EXCLUDE_DIRS = garbage, temp\n\
+    EXCLUDE_ENDINGS = ~, gif, jpg, bak\n\
+    EXCLUDE_FILES = abc.log, Thumbs.db")
+                fhg.close()
+            except OSError as err:
+                printLog("Cannot create sample backup config: %s" % self.path_config_global)
+                printLog("Error: %s" % err.strerror)
+                sys.exit(1)
+
+            printLog("Now you can create user specified backup entries in %s" % self.path_configdir)
+            printLog("User backup config files' extension should be .cfg")
             sys.exit(0)
 
     def getConfigList(self, dirname):
@@ -128,12 +169,12 @@ class Backupy:
         filepath = os.path.join(path_target_dir, bckentry['filename'])
         bckentry['archivefullpath'] = filepath
         if os.path.isfile(filepath):
-            print("%s There is already an archive with this name: %s" % (getTime(), filepath))
-            print(getTime() + " Skipping")
+            printLog("There is already an archive with this name: %s" % filepath)
+            printLog("Skipping")
             return False
         else:
-            print("%s Creating archive: %s" % (getTime(), filepath))
-            print("%s Compressing method: %s" % (getTime(), bckentry['method']))
+            printLog("Creating archive: %s" % filepath)
+            printLog("Compressing method: %s" % bckentry['method'])
         return True
 
     def compress_tar(self, bckentry):
@@ -146,7 +187,7 @@ class Backupy:
             elif bckentry['method'] == "targz":
                 mode = "w:gz"
             else:
-                print("%s Wrong tar compress method (%s). Exiting.." % (getTime(), bckentry['method']))
+                printLog("Wrong tar compress method (%s). Exiting.." % bckentry['method'])
                 exit(4)
 
             archive = tarfile.open(filepath, mode)
@@ -160,23 +201,22 @@ class Backupy:
                 print(getTime() + " Wrong 'filepath' value! Exiting.")
                 exit(2)
         except (IOError, OSError) as err:
-            print("%s IOError/OSError: %s" % (getTime(), err.strerror))
-            if err[0] == errno.EACCES:
-                print("%s Skipping. Can't write to this file: %s" % (getTime(), filepath))
-            elif err[0] == errno.ENOSPC:
-                print("%s Exiting!" % getTime())
-                exit(3)
+            if err.errno == errno.EACCES:
+                printLog("IOError/OSError: Can't write to this file: %s" % filepath)
+                sys.exit(err.errno)
+            if err.errno == errno.ENOSPC:
+                printLog("IOError/OSError: No space on disk")
+                sys.exit(err.errno)
+            if err.errno == errno.ENOENT:
+                printLog("IOError/OSError: No such file or directory to compress: %s" % filepath)
+                sys.exit(err.errno)
             else:
-                print("%s Previous exception was unhandled" % getTime())
-            if err[0] == errno.ENOENT:
-                print("%s Skipping. No such file or directory to compress: %s" % (getTime(), bckentry['pathcompress']))
-                exit(4)
-            else:
-                print("%s Unhandled other OSError: %s" % (getTime(), err.strerror))
+                printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
+                sys.exit(99)
         else:
             archive.close()
             filesize = os.path.getsize(filepath)
-            print("%s Done [%s]" % (getTime(), sizeof_fmt(filesize)))
+            printLog("Done [%s]" % sizeof_fmt(filesize))
 
     def compress_zip(self, t, bobject):
         """ Compressing with zip method """
@@ -207,10 +247,11 @@ class Backupy:
             print(getTime() + " Done. [%s KBytes]" % (round(filesize/1024, 1)))
 
     def init(self):
-        print("backupy 0.1")
+        printLog("backupy starting")
         self.firstRun()
 
         # Create user backup config file list
+        self.config_global = ConfigHandler.getGlobalConfigs(self.path_config_global)
         self.path_config_entry_list = self.getConfigList(self.path_configdir)
 
         # Read user backup config files in iteration
@@ -237,12 +278,12 @@ class Backupy:
                 # elif mode == "zip":
                 #     compress_zip(target, backupentry)
                 else:
-                    print("Wrong method type. Exiting.")
-                    exit(1)
-
+                    printLog("Wrong method type. Exiting.")
+                    sys.exit(1)
 
 
 def main():
+    checkPythonVersion()
     backupy = Backupy()
     backupy.init()
     backupy.execute_backups()
