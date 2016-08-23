@@ -83,10 +83,6 @@ class Backupy:
 
         self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
 
-    def getoserrorcode(self, errstr):
-        code = [i for i, v in enumerate(self.oserrorcodes) if v[0] == errstr]
-        return code[0]
-
     def firstRun(self):
         if not os.path.exists(self.home_path):
             printLog("Can not access home directory: %s" % self.home_path)
@@ -122,6 +118,7 @@ EXCLUDE_DIRS = myexcldirg_global\n")
                 fhg = open(samplecfgfile, "w")
                 fhg.write("[backupentry]\n\
 NAME = Document backup\n\
+ENABLED = TRUE\n\
 ARCHIVE_NAME = document_backup\n\
 RESULT_DIR = /home/friedrich/mybackups\n\
 METHOD = targz\n\
@@ -178,6 +175,10 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
         """" Checks and prints backup entry processing """
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
+
+        if bckentry['enabled'].lower() != "true":
+            printLog("Backup entry \"%s\" is DISABLED, SKIPPING." % bckentry['name'])
+            return False
         if os.path.isfile(filepath):
             printLog("There is already an archive with this name: %s" % filepath)
             printLog("Skipping")

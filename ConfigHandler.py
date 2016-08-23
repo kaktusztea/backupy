@@ -16,6 +16,7 @@ def getBackupConfigs(configfile):
     try:
         conffile.read(configfile)
         bconfig['sections'] = conffile.sections()
+        bconfig['enabled'] = conffile.get('backupentry', 'ENABLED', raw=False)
         bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
         # TODO: handle spaces in archive_name (filter and sys.exit)
         bconfig['archive_name'] = conffile.get('backupentry', 'ARCHIVE_NAME', raw=False)
