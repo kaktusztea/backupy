@@ -18,7 +18,7 @@ def getBackupConfigs(configfile):
         bconfig['sections'] = conffile.sections()
         bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
         bconfig['filename'] = conffile.get('backupentry', 'FILENAME', raw=False)
-        bconfig['resultpath'] = conffile.get('backupentry', 'RESULTPATH', raw=False)
+        bconfig['result_dir'] = conffile.get('backupentry', 'RESULT_DIR', raw=False)
         bconfig['method'] = conffile.get('backupentry', 'METHOD', raw=False)
         bconfig['followsym'] = conffile.get('backupentry', 'FOLLOWSYM', raw=False)
         bconfig['withoutpath'] = conffile.get('backupentry', 'WITHOUTPATH', raw=False)

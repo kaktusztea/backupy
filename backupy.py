@@ -62,9 +62,14 @@ def printLog(log):
 def sizeof_fmt(num, suffix='B'):
     for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
         if abs(num) < 1024.0:
-            return "%3.1f%s%s" % (num, unit, suffix)
+            return "%3.1f %s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
+
+
+def getFreeSpace(dirname):
+    st = os.statvfs(dirname)
+    return sizeof_fmt(st.f_bavail * st.f_frsize)
 
 
 class Backupy:
@@ -80,7 +85,6 @@ class Backupy:
         self.cfg_actual = ''
 
         self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
-
 
     def getoserrorcode(self, errstr):
         code = [i for i, v in enumerate(self.oserrorcodes) if v[0] == errstr]
@@ -106,9 +110,9 @@ class Backupy:
             try:
                 fhg = open(self.path_config_global, "w")
                 fhg.write("[BACKUPY_GLOBALS]\n\
-    EXCLUDE_ENDINGS = .bak, .swp\n\
-    EXCLUDE_FILES = Thumbs.db, faja.txt\n\
-    EXCLUDE_DIRS = myexcldirg_global")
+EXCLUDE_ENDINGS = .bak, .swp\n\
+EXCLUDE_FILES = Thumbs.db, faja.txt\n\
+EXCLUDE_DIRS = myexcldirg_global\n")
                 fhg.close()
                 del fhg
             except OSError as err:
@@ -120,16 +124,16 @@ class Backupy:
             try:
                 fhg = open(samplecfgfile, "w")
                 fhg.write("[backupentry]\n\
-    NAME = Document backup\n\
-    FILENAME = document_backup\n\
-    RESULTPATH = /home/friedrich/mybackups\n\
-    METHOD = targz\n\
-    FOLLOWSYM = yes\n\
-    WITHOUTPATH = yes\n\
-    INCLUDE_DIR = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
-    EXCLUDE_DIRS = garbage, temp\n\
-    EXCLUDE_ENDINGS = ~, gif, jpg, bak\n\
-    EXCLUDE_FILES = abc.log, Thumbs.db")
+NAME = Document backup\n\
+FILENAME = document_backup\n\
+RESULT_DIR = /home/friedrich/mybackups\n\
+METHOD = targz\n\
+FOLLOWSYM = yes\n\
+WITHOUTPATH = yes\n\
+INCLUDE_DIR = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
+EXCLUDE_DIRS = garbage, temp\n\
+EXCLUDE_ENDINGS = ~, gif, jpg, bak\n\
+EXCLUDE_FILES = abc.log, Thumbs.db\n")
                 fhg.close()
             except OSError as err:
                 printLog("Cannot create sample backup config: %s" % self.path_config_global)
@@ -183,6 +187,7 @@ class Backupy:
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
+            printLog("Free space in target dir: %s" % getFreeSpace(path_target_dir))
         return True
 
     def compress_tar(self, bckentry):
@@ -197,7 +202,7 @@ class Backupy:
             else:
                 printLog("Error: wrong tar compress method (%s)." % bckentry['method'])
                 printLog("Exiting")
-                exit(1)
+                sys.exit(1)
 
             archive = tarfile.open(filepath, mode)
             if bckentry['withoutpath'] == 'no':
@@ -207,8 +212,37 @@ class Backupy:
                 for entry in bckentry['include_dir']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
-                print(getTime() + " Wrong 'filepath' value! Exiting.")
-                exit(2)
+                printLog("Wrong 'filepath' value!")
+                printLog("Exiting")
+                sys.exit(1)        # TODO: only skipping!
+        except (IOError, OSError) as err:
+            if err.errno == errno.EACCES:
+                # printLog("OSError: Permission denied on %s" % filepath)
+                printLog("OSError: %s on %s" % (os.strerror(err.errno), filepath))
+                sys.exit(err.errno)
+            if err.errno == errno.ENOSPC:
+                printLog("OSError: No space on disk")
+                sys.exit(err.errno)
+            if err.errno == errno.ENOENT:
+                printLog("IOError/OSError: No such file or directory to compress: %s" % filepath)
+                sys.exit(err.errno)
+            else:
+                printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
+                sys.exit(99)
+        else:
+            archive.close()
+            filesize = os.path.getsize(filepath)
+            printLog("Done [%s]" % sizeof_fmt(filesize))
+
+    def compress_zip(self, t, bobject):           # TODO: full obsolete, rewrite, refactor!
+        """ Compressing with zip method """
+        dirpath = bobject['pathcompress'] + "/*"
+        filepath = os.path.join(t['path'], bobject['filename'])
+
+        try:
+            archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
+            archive.comment = bobject['description']
+            archive.write(dirpath, compress_type=compression)
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
                 printLog("IOError/OSError: Can't write to this file: %s" % filepath)
@@ -226,34 +260,6 @@ class Backupy:
             archive.close()
             filesize = os.path.getsize(filepath)
             printLog("Done [%s]" % sizeof_fmt(filesize))
-
-    def compress_zip(self, t, bobject):
-        """ Compressing with zip method """
-        dirpath = bobject['pathcompress'] + "/*"
-        filepath = os.path.join(t['path'], bobject['filename'])
-
-        try:
-            archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
-            archive.comment = bobject['description']
-            archive.write(dirpath, compress_type=compression)
-        except (IOError, OSError) as err:
-            print("  [IOError] %s" % err.strerror)
-            if err[0] == errno.EACCES:
-                print(getTime() + " Skipping. Can't write to this file: %s" % filepath)
-            elif err[0] == errno.ENOSPC:
-                print("  [Exiting!]")
-                exit(3)
-            else:
-                print("  [Previous exception is unhandled]")
-            if err[0] == errno.ENOENT:
-                print(getTime() +" Skipping. No such file or directory to compress: %s" % dirpath)
-                exit(4)
-            else:
-                print(getTime() +" Unhandled other OSError: %s" % err.strerror)
-        else:
-            archive.close()
-            filesize = os.path.getsize(filepath)
-            print(getTime() + " Done. [%s KBytes]" % (round(filesize/1024, 1)))
 
     def init(self):
         printLog("backupy starting")
@@ -286,7 +292,7 @@ class Backupy:
             self.cfg_actual = cfname
             mode = cfentry['method']
 
-            if self.compress_pre(cfentry['resultpath'], cfentry):
+            if self.compress_pre(cfentry['result_dir'], cfentry):
                 print("%s Starting backup" % getTime())
                 if mode == "tar" or mode == "targz":
                     self.compress_tar(cfentry)
