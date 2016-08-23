@@ -3,14 +3,11 @@
 
 __author__ = 'kaktusz'
 import os
-import re
 import sys
 import errno
 import ntpath
 import tarfile
 import datetime
-import time
-import getpass
 import zipfile
 try:
     import zlib
@@ -125,12 +122,12 @@ EXCLUDE_DIRS = myexcldirg_global\n")
                 fhg = open(samplecfgfile, "w")
                 fhg.write("[backupentry]\n\
 NAME = Document backup\n\
-FILENAME = document_backup\n\
+ARCHIVE_NAME = document_backup\n\
 RESULT_DIR = /home/friedrich/mybackups\n\
 METHOD = targz\n\
 FOLLOWSYM = yes\n\
 WITHOUTPATH = yes\n\
-INCLUDE_DIR = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
+INCLUDE_DIRS = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
 EXCLUDE_DIRS = garbage, temp\n\
 EXCLUDE_ENDINGS = ~, gif, jpg, bak\n\
 EXCLUDE_FILES = abc.log, Thumbs.db\n")
@@ -147,26 +144,29 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
             sys.exit(0)
 
     def getConfigList(self, dirname):
-        filter = ['globals.cfg', '.sample']
-        # files = [os.path.join(dirname, f) for f in os.listdir(dirname) if os.path.isfile(os.path.join(dirname, f)) and f not in 'globals.cfg']
+        """ Filters config file list: only user configs """
+        blacklist = ['globals.cfg', '.sample']
         files = [os.path.join(dirname, f) for f in os.listdir(dirname)
                  if os.path.isfile(os.path.join(dirname, f))
-                 and not any(f.endswith(ext) for ext in filter)]
+                 and not any(f.endswith(ext) for ext in blacklist)]
         return files
 
     def filter_general(self, tarinfo):
         """ filter function for tar creation - general and custom """
-        # TODO: double check this!!
+        # TODO: It works, but PEP8 shows warnings
+        # http://stackoverflow.com/questions/23962434/pycharm-expected-type-integral-got-str-instead
         if tarinfo.name.endswith(tuple(self.config_global['exclude_endings'])):
             return None
         elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             return None
 
+        # TODO: It works, but PEP8 shows warnings
         elif path_leaf(tarinfo.name) in self.config_global['exclude_files']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
             return None
 
+        # TODO: It works, but PEP8 shows warnings
         elif path_leaf(tarinfo.name) in self.config_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
@@ -174,10 +174,9 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
         else:
             return tarinfo
 
-
     def compress_pre(self, path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
-        filepath = os.path.join(path_target_dir, bckentry['filename'])
+        filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
         if os.path.isfile(filepath):
             printLog("There is already an archive with this name: %s" % filepath)
@@ -206,10 +205,10 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
 
             archive = tarfile.open(filepath, mode)
             if bckentry['withoutpath'] == 'no':
-                for entry in bckentry['include_dir']:
+                for entry in bckentry['include_dirs']:
                     archive.add(entry, filter=self.filter_general)
             elif bckentry['withoutpath'] == 'yes':
-                for entry in bckentry['include_dir']:
+                for entry in bckentry['include_dirs']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
                 printLog("Wrong 'filepath' value!")
@@ -237,7 +236,7 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
     def compress_zip(self, t, bobject):           # TODO: full obsolete, rewrite, refactor!
         """ Compressing with zip method """
         dirpath = bobject['pathcompress'] + "/*"
-        filepath = os.path.join(t['path'], bobject['filename'])
+        filepath = os.path.join(t['path'], bobject['archive_name'])
 
         try:
             archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
@@ -281,11 +280,11 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
             self.configs_user[leaf] = ConfigHandler.getBackupConfigs(cfpath)
             self.configs_user[leaf]['archivefullpath'] = 'replace_this'
             if self.configs_user[leaf]['method'] == 'tar':
-                self.configs_user[leaf]['filename'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
+                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
             if self.configs_user[leaf]['method'] == 'targz':
-                self.configs_user[leaf]['filename'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
+                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
             if self.configs_user[leaf]['method'] == 'zip':
-                self.configs_user[leaf]['filename'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
+                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
 
     def execute_backups(self):
         for cfname, cfentry in self.configs_user.items():
