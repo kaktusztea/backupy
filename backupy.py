@@ -18,6 +18,14 @@ except:
 __author__ = 'kaktusz'
 
 
+def stripDashAtEnd(endinglist):
+    for idx, elem in enumerate(endinglist):
+        while elem.endswith("/"):
+            elem = elem[:-1]
+        endinglist[idx] = elem
+    return endinglist
+
+
 def dotForEndings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith("."):
@@ -46,10 +54,11 @@ def getBackupConfigs(configfile):
 
         ll = conffile.get('backupentry', 'INCLUDE_DIRS', raw=False)
         bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
-        # map(str.strip, bconfig['include_dirs'])
+        bconfig['include_dirs'] = stripDashAtEnd(bconfig['include_dirs'])
 
         ll = conffile.get('backupentry', 'EXCLUDE_DIRS', raw=False)
         bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
+        bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
 
         ll = conffile.get('backupentry', 'EXCLUDE_ENDINGS', raw=False)
         bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
@@ -82,6 +91,8 @@ def getGlobalConfigs(globalconfig):
 
         ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_DIRS', raw=False)
         bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
+        bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
+
     except configparser.NoSectionError as err:
         print("Global config file syntax error: %s" % globalconfig)
         print("Error: %s" % err.message)
