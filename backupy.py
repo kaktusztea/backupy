@@ -45,8 +45,11 @@ def getBackupConfigs(configfile):
         bconfig['sections'] = conffile.sections()
         bconfig['enabled'] = conffile.get('backupentry', 'ENABLED', raw=False)
         bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
-        # TODO: handle spaces in archive_name (filter and sys.exit)
+
         bconfig['archive_name'] = conffile.get('backupentry', 'ARCHIVE_NAME', raw=False)
+        if " " in bconfig['archive_name']:
+            raise configparser.Error("Space in archive name is not allowed.")
+
         bconfig['result_dir'] = conffile.get('backupentry', 'RESULT_DIR', raw=False)
         bconfig['method'] = conffile.get('backupentry', 'METHOD', raw=False)
         bconfig['followsym'] = conffile.get('backupentry', 'FOLLOWSYM', raw=False)
@@ -67,7 +70,7 @@ def getBackupConfigs(configfile):
         ll = conffile.get('backupentry', 'EXCLUDE_FILES', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
-    except (configparser.NoSectionError, configparser.NoOptionError) as err:
+    except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
         print("Invalid config file: %s" % configfile)
         print("Error: %s" % err.message)
         sys.exit(1)
@@ -235,20 +238,21 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
 
     def filter_general(self, tarinfo):
         """ filter function for tar creation - general and custom """
-        # TODO: It works, but PEP8 shows warnings
+        # It works, only PEP8 shows warnings
         # http://stackoverflow.com/questions/23962434/pycharm-expected-type-integral-got-str-instead
         if tarinfo.name.endswith(tuple(self.config_global['exclude_endings'])):
             return None
         elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             return None
 
-        # TODO: It works, but PEP8 shows warnings
+        #  It works, only PEP8 shows warnings
         elif path_leaf(tarinfo.name) in self.config_global['exclude_files']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
             return None
 
-        # TODO: It works, but PEP8 shows warnings
+        #  It works, only PEP8 shows warnings
+        # TODO: WITHOUTPATH==TRUE -> works; == FALSE -> doesn't work
         elif path_leaf(tarinfo.name) in self.config_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
