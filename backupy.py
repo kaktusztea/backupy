@@ -18,6 +18,28 @@ except:
 __author__ = 'kaktusz'
 
 
+def stripHashAtEnd(line):
+    return line.split("#")[0].rstrip()
+
+
+def stripHashInDictValues(mydict):
+    for idx, mylist in mydict.items():
+        if isinstance(mylist, list):
+            for lidx, elem in enumerate(mylist):
+                mydict[idx][lidx] = stripHashAtEnd(elem)
+        # elif mylist is str:
+        else:
+            mydict[idx] = stripHashAtEnd(mylist)
+    return mydict
+
+
+def checkIfContainsSpaces(line):
+    if " " in line:
+        return True
+    else:
+        return False
+
+
 def stripDashAtEnd(endinglist):
     for idx, elem in enumerate(endinglist):
         while elem.endswith("/"):
@@ -45,15 +67,12 @@ def getBackupConfigs(configfile):
         bconfig['sections'] = conffile.sections()
         bconfig['enabled'] = conffile.get('backupentry', 'ENABLED', raw=False)
         bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
-
         bconfig['archive_name'] = conffile.get('backupentry', 'ARCHIVE_NAME', raw=False)
-        if " " in bconfig['archive_name']:
-            raise configparser.Error("Space in archive name is not allowed.")
 
         bconfig['result_dir'] = conffile.get('backupentry', 'RESULT_DIR', raw=False)
         bconfig['method'] = conffile.get('backupentry', 'METHOD', raw=False)
         bconfig['followsym'] = conffile.get('backupentry', 'FOLLOWSYM', raw=False)
-        bconfig['withoutpath'] = conffile.get('backupentry', 'WITHOUTPATH', raw=False)
+        bconfig['withpath'] = conffile.get('backupentry', 'WITHPATH', raw=False)
 
         ll = conffile.get('backupentry', 'INCLUDE_DIRS', raw=False)
         bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
@@ -70,12 +89,16 @@ def getBackupConfigs(configfile):
         ll = conffile.get('backupentry', 'EXCLUDE_FILES', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
+        bconfig = stripHashInDictValues(bconfig)
+        if checkIfContainsSpaces(bconfig['archive_name']):
+            raise configparser.Error("Space in archive name is not allowed.")
+
     except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
         print("Invalid config file: %s" % configfile)
         print("Error: %s" % err.message)
         sys.exit(1)
-    # TODO: check if ARCHIVE_NAME is unique in list
-    return bconfig
+    else:
+        return bconfig
 
 
 def getGlobalConfigs(globalconfig):
@@ -96,11 +119,14 @@ def getGlobalConfigs(globalconfig):
         bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
         bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
 
+        bconfig = stripHashInDictValues(bconfig)
+
     except configparser.NoSectionError as err:
         print("Global config file syntax error: %s" % globalconfig)
         print("Error: %s" % err.message)
         sys.exit(1)
-    return bconfig
+    else:
+        return bconfig
 
 
 def checkPythonVersion():
@@ -144,7 +170,7 @@ def printLog(log):
 
 def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
             return "%3.1f %s%s" % (num, unit, suffix)
         num /= 1024.0
@@ -204,17 +230,17 @@ EXCLUDE_DIRS = myexcldirg_global\n")
             try:
                 fhg = open(samplecfgfile, "w")
                 fhg.write("[backupentry]\n\
-NAME = Document backup\n\
-ENABLED = TRUE\n\
-ARCHIVE_NAME = document_backup\n\
-RESULT_DIR = /home/friedrich/mybackups\n\
-METHOD = targz\n\
-FOLLOWSYM = yes\n\
-WITHOUTPATH = yes\n\
-INCLUDE_DIRS = /home/friedrich/documents/memoirs, /home/fiedrich/documents/novels\n\
-EXCLUDE_DIRS = garbage, temp\n\
-EXCLUDE_ENDINGS = ~, gif, jpg, bak\n\
-EXCLUDE_FILES = abc.log, Thumbs.db\n")
+NAME = Document backup               # write entry name here\n\
+ENABLED = true                       # is this backup active. {TRUE, FALSE}\n\
+ARCHIVE_NAME = document_backup       # archive file name without extension\n\
+RESULT_DIR = /home/joe/mybackups     # Where to create the archive file\n\
+METHOD = targz                       # Compression method {tar, targz, zip}\n\
+FOLLOWSYM = yes                      # Should compressor follow symlinks\n\
+WITHPATH = no                       # compress files with or without full path\n\
+INCLUDE_DIRS = /home/joe/humour, /home/joe/novels   # list of included directories\n\
+EXCLUDE_DIRS = garbage, temp         # list of excluded directories\n\
+EXCLUDE_ENDINGS = ~, gif, jpg, bak   # excluded file extension types\n\
+EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames\n")
                 fhg.close()
             except OSError as err:
                 printLog("Cannot create sample backup config: %s" % self.path_config_global)
@@ -252,7 +278,7 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
             return None
 
         #  It works, only PEP8 shows warnings
-        # TODO: WITHOUTPATH==TRUE -> works; == FALSE -> doesn't work
+        # TODO: WITHPATH==FALSE -> works;  WITHPATH==TRUE -> doesn't work
         elif path_leaf(tarinfo.name) in self.config_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
@@ -295,14 +321,14 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
 
             # TODO: Implement "follow symlinks" option!
             archive = tarfile.open(filepath, mode)
-            if bckentry['withoutpath'] == 'no':
+            if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dirs']:
                     archive.add(entry, filter=self.filter_general)
-            elif bckentry['withoutpath'] == 'yes':
+            elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dirs']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
-                printLog("Wrong 'withoutpath' config value! Should be \"YES\" / \"NO\". Exiting.")
+                printLog("Wrong 'withpath' config value! Should be \"YES\" / \"NO\". Exiting.")
                 sys.exit(1)
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
@@ -371,10 +397,15 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
             self.configs_user[leaf]['archivefullpath'] = 'replace_this'
             if self.configs_user[leaf]['method'] == 'tar':
                 self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
-            if self.configs_user[leaf]['method'] == 'targz':
+            elif self.configs_user[leaf]['method'] == 'targz':
                 self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
-            if self.configs_user[leaf]['method'] == 'zip':
+            elif self.configs_user[leaf]['method'] == 'zip':
                 self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
+            else:
+                printLog("Error: wrong compression method declared in cfg file: %s" % leaf)
+                printLog("Valid: METHOD = { tar ; targz ; zip}")
+                printLog("Exiting")
+                sys.exit(1)
 
     def execute_backups(self):
         for cfname, cfentry in self.configs_user.items():
