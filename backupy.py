@@ -7,21 +7,92 @@ import errno
 import ntpath
 import tarfile
 import datetime
+import configparser
 import zipfile
 try:
     import zlib
     compression = zipfile.ZIP_DEFLATED
 except:
     compression = zipfile.ZIP_STORED
-import ConfigHandler
 
 __author__ = 'kaktusz'
+
+
+def dotForEndings(endinglist):
+    for idx, elem in enumerate(endinglist):
+        if not elem.startswith("."):
+            endinglist[idx] = "." + elem
+    return endinglist
+
+
+def getBackupConfigs(configfile):
+    if not os.path.exists(configfile):
+        print("Config file does not exists.")
+        sys.exit(1)
+
+    bconfig = {}
+    conffile = configparser.ConfigParser()
+    try:
+        conffile.read(configfile)
+        bconfig['sections'] = conffile.sections()
+        bconfig['enabled'] = conffile.get('backupentry', 'ENABLED', raw=False)
+        bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
+        # TODO: handle spaces in archive_name (filter and sys.exit)
+        bconfig['archive_name'] = conffile.get('backupentry', 'ARCHIVE_NAME', raw=False)
+        bconfig['result_dir'] = conffile.get('backupentry', 'RESULT_DIR', raw=False)
+        bconfig['method'] = conffile.get('backupentry', 'METHOD', raw=False)
+        bconfig['followsym'] = conffile.get('backupentry', 'FOLLOWSYM', raw=False)
+        bconfig['withoutpath'] = conffile.get('backupentry', 'WITHOUTPATH', raw=False)
+
+        ll = conffile.get('backupentry', 'INCLUDE_DIRS', raw=False)
+        bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
+        # map(str.strip, bconfig['include_dirs'])
+
+        ll = conffile.get('backupentry', 'EXCLUDE_DIRS', raw=False)
+        bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
+
+        ll = conffile.get('backupentry', 'EXCLUDE_ENDINGS', raw=False)
+        bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
+        bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
+
+        ll = conffile.get('backupentry', 'EXCLUDE_FILES', raw=False)
+        bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+
+    except (configparser.NoSectionError, configparser.NoOptionError) as err:
+        print("Invalid config file: %s" % configfile)
+        print("Error: %s" % err.message)
+        sys.exit(1)
+    # TODO: check if ARCHIVE_NAME is unique in list
+    return bconfig
+
+
+def getGlobalConfigs(globalconfig):
+    bconfig = {}
+    conffile = configparser.ConfigParser()
+    try:
+        conffile.read(globalconfig)
+        bconfig['sections'] = conffile.sections()
+
+        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_ENDINGS', raw=False)
+        bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
+        bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
+
+        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_FILES', raw=False)
+        bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+
+        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_DIRS', raw=False)
+        bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
+    except configparser.NoSectionError as err:
+        print("Global config file syntax error: %s" % globalconfig)
+        print("Error: %s" % err.message)
+        sys.exit(1)
+    return bconfig
 
 
 def checkPythonVersion():
     try:
         assert sys.version_info >= (3, 4)
-    except AssertionError as err:
+    except AssertionError:
         printLog("Minimum python version: 3.4")
         printLog("Exiting")
         sys.exit(1)
@@ -58,6 +129,7 @@ def printLog(log):
 
 
 def sizeof_fmt(num, suffix='B'):
+    """ returns with human readable byte size format """
     for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
         if abs(num) < 1024.0:
             return "%3.1f %s%s" % (num, unit, suffix)
@@ -141,7 +213,8 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
             printLog("Important: User backup config files' extension should be .cfg")
             sys.exit(0)
 
-    def getConfigList(self, dirname):
+    @staticmethod
+    def getConfigList(dirname):
         """ Filters config file list: only user configs """
         blacklist = ['globals.cfg', '.sample']
         files = [os.path.join(dirname, f) for f in os.listdir(dirname)
@@ -267,7 +340,7 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
         self.firstRun()
 
         # Create user backup config file list
-        self.config_global = ConfigHandler.getGlobalConfigs(self.path_config_global)
+        self.config_global = getGlobalConfigs(self.path_config_global)
         self.path_config_entry_list = self.getConfigList(self.path_configdir)
         if not self.path_config_entry_list:
             printLog("---------------------------------------------------------------")
@@ -279,7 +352,7 @@ EXCLUDE_FILES = abc.log, Thumbs.db\n")
         # Read user backup config files in iteration
         for cfpath in self.path_config_entry_list:
             leaf = path_leaf(cfpath)
-            self.configs_user[leaf] = ConfigHandler.getBackupConfigs(cfpath)
+            self.configs_user[leaf] = getBackupConfigs(cfpath)
             self.configs_user[leaf]['archivefullpath'] = 'replace_this'
             if self.configs_user[leaf]['method'] == 'tar':
                 self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
