@@ -178,6 +178,7 @@ def sizeof_fmt(num, suffix='B'):
 
 
 def getFreeSpace(dirname):
+    """ returns directory's free space in human readable format """
     st = os.statvfs(dirname)
     return sizeof_fmt(st.f_bavail * st.f_frsize)
 
