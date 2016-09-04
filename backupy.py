@@ -12,15 +12,16 @@ import datetime
 import configparser
 try:
     import zlib
-    compression = zipfile.ZIP_DEFLATED
+    zcompression = zipfile.ZIP_DEFLATED
 except ImportError:
-    compression = zipfile.ZIP_STORED
+    zcompression = zipfile.ZIP_STORED
 
 __author__ = 'kaktusz'
 __version__ = '0.8'
 
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
+sep = os.path.sep
 
 
 def stripHashAtEnd(line):
@@ -64,21 +65,21 @@ def create_config_file(config_file_path):
     # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
     filehandler = ""
     cfghandler = configparser.ConfigParser()
-    cfghandler['GLOBAL_EXCLUDES'] = {'EXCLUDE_ENDINGS': '~, swp',
-                                     'EXCLUDE_FILES': 'Thumbs.db, abcdefgh.txt',
-                                     'EXCLUDE_DIRS': 'my_globaly_exclude_dir'}
+    cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
+                                     'exclude_files': 'Thumbs.db, abcdefgh.txt',
+                                     'exclude_dirs': 'my_globaly_exclude_dir'}
     for i in range(1, 4):
-        cfghandler['BACKUP'+str(i)] = {'NAME': 'Document backup' + str(i),
-                                       'ENABLED': 'FALSE',
-                                       'ARCHIVE_NAME': 'document_backup' + str(i),
-                                       'RESULT_DIR': '/home/joe/mybackups',
-                                       'METHOD': 'targz',
-                                       'FOLLOWSYM': 'yes',
-                                       'WITHPATH': 'no',
-                                       'INCLUDE_DIRS': '/home/joe/humour, /home/joe/novels',
-                                       'EXCLUDE_DIRS': 'garbage, temp',
-                                       'EXCLUDE_ENDINGS': '~, gif, jpg, bak',
-                                       'EXCLUDE_FILES': 'abc.log, Thumbs.db'}
+        cfghandler['BACKUP'+str(i)] = {'name': 'Document backup' + str(i),
+                                       'enabled': 'false',
+                                       'archive_name': 'document_backup' + str(i),
+                                       'result_dir': '/home/joe/mybackups',
+                                       'method': 'targz',
+                                       'followsym': 'yes',
+                                       'withpath': 'no',
+                                       'include_dirs': '/home/joe/humour, /home/joe/novels',
+                                       'exclude_dirs': 'garbage, temp',
+                                       'exclude_endings': '~, gif, jpg, bak',
+                                       'exclude_files': 'abc.log, swp.db'}
     try:
         filehandler = open(config_file_path, "w")
         cfghandler.write(filehandler, space_around_delimiters=True)
@@ -271,8 +272,7 @@ class Backupy:
         self.configs_global = ""
         self.configs_user = {}
         self.cfg_actual = ''
-
-        self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
+        # self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
 
     @staticmethod
     def help():
@@ -340,13 +340,16 @@ class Backupy:
             return None
 
         #  It works, only PEP8 shows warnings
-        # TODO: WITHPATH==FALSE -> works;  WITHPATH==TRUE -> doesn't work
         elif path_leaf(tarinfo.name) in self.configs_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
             return None
         else:
             return tarinfo
+
+    def filter_zip(self, zip_something):
+        # TODO: maybe needed (it'd be good)
+        pass
 
     @staticmethod
     def compress_pre(path_target_dir, bckentry):
@@ -388,7 +391,7 @@ class Backupy:
 
             # http://stackoverflow.com/a/39321142/4325232
             dereference = True if bckentry['followsym'] == "yes" else False
-            archive = tarfile.open(filepath, mode=mode, dereference=dereference)
+            archive = tarfile.open(name=filepath, mode=mode, dereference=dereference)
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dirs']:
@@ -421,15 +424,28 @@ class Backupy:
 
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
-        # TODO: this is obsolete -> rewrite, refactor!
+        # TODO: adding multiple directories
+        # TODO: withpath == true/false
+        # TODO: filtering dirs, files!
+        # TODO: need to add description?
+        # https://docs.python.org/3/library/zipfile.html
+        # https://uncorkedstudios.com/blog/zipping-multiple-folders-with-python
+        # http://stackoverflow.com/a/10597268/4325232
         # http://stackoverflow.com/a/14569017
+        # http://stackoverflow.com/a/459419/4325232
 
-        dirpath = bckentry['pathcompress'] + "/*"
+        archive = ""
         filepath = bckentry['archivefullpath']
         try:
-            archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
-            archive.comment = bckentry['description']
-            archive.write(dirpath, compress_type=compression)
+            archive = zipfile.ZipFile(file=filepath, mode="w", compression=zcompression)
+            # archive.comment = bckentry['description']
+            for entry in bckentry['include_dirs']:
+                for root, dirs, files in os.walk(top=entry, followlinks=True):
+                    for file in files:
+                        # fn = os.path.join(base, file)
+                        # zfile.write(fn, fn[rootlen:])
+                        archive.write(filename=os.path.join(root, file), arcname=root+sep+file, compress_type=zcompression)
+
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
                 printLog("IOError/OSError: Can't write to this file: %s" % filepath)
@@ -443,10 +459,10 @@ class Backupy:
             else:
                 printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
                 sys.exit(99)
-        else:
+        finally:
             archive.close()
-            filesize = os.path.getsize(filepath)
-            printLog("Done [%s]" % sizeof_fmt(filesize))
+        filesize = os.path.getsize(filepath)
+        printLog("Done [%s]" % sizeof_fmt(filesize))
 
     def read_configs(self):
         printLog("backupy v" + __version__ + " starting")
