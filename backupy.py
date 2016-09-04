@@ -283,20 +283,23 @@ class Backupy:
               "   ./backupy.py /foo/mybackup.cfg    # starts with custom backup set config file\n"
               "   ./backupy.py --help               # this help\n\n"
               "Example for config file:\n"
-              "[GLOBAL_EXCLUDES]                    # you can change options' values, but don't modify section name and option names!\n"
-              "\n"
-              "[BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
-              "name = My Document backup            # write entry name here\n"
-              "enabled = true                       # is this backup active. {true, false}\n"
-              "archive_name = document_backup       # archive file name without extension\n"
-              "result_dir = /home/joe/mybackups     # Where to create the archive file\n"
-              "method = targz                       # Compression method {tar, targz, zip}\n"
-              "followsym = yes                      # Should compressor follow symlinks\n"
-              "withpath = no                        # compress files with or without full path\n"
-              "include_dirs = /home/joe/humour, /home/joe/novels   # list of included directories\n"
-              "exclude_dirs = garbage, temp         # list of excluded directories\n"
-              "exclude_endings = ~, gif, jpg, bak   # excluded file extension types\n"
-              "exclude_files = abc.log, Thumbs.db   # excluded filenames")
+              "   [GLOBAL_EXCLUDES]                    # you can change options' values, but don't modify section name and option names!\n"
+              "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
+              "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
+              "   exclude_dirs = trash, garbage        # list of globally excluded directories\n\n"
+              "   [BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
+              "   name = My Document backup            # write entry name here\n"
+              "   enabled = true                       # is this backup active. {true, false}\n"
+              "   archive_name = document_backup       # archive file name without extension\n"
+              "   result_dir = /home/joe/mybackups     # Where to create the archive file\n"
+              "   method = targz                       # Compression method {tar, targz, zip}\n"
+              "   followsym = yes                      # Should compressor follow symlinks\n"
+              "   withpath = no                        # compress files with or without full path\n"
+              "   include_dirs = /home/joe/humour, /home/joe/novels   # list of included directories\n"
+              "   exclude_dirs = garbage, temp         # list of excluded directories\n"
+              "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
+              "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
+              "Note: use of comment sign '#' is allowed - at the end of option lines\n")
 
     def check_first_run(self):
         if not os.path.exists(self.home_path):
@@ -358,8 +361,8 @@ class Backupy:
         if os.path.isfile(filepath):
             printLog("--------------------------------------------------")
             printLog("Executing backup '%s'" % bckentry['name'])
-            printLog("There is already an archive with this name: %s" % filepath)
-            printLog("Skipping")
+            printError("There is already an archive with this name: %s" % filepath)
+            printError("Skipping")
             return False
         else:
             printLog("--------------------------------------------------")
@@ -444,7 +447,7 @@ class Backupy:
             printLog("Done [%s]" % sizeof_fmt(filesize))
 
     def read_configs(self):
-        printLog("backupy starting")
+        printLog("backupy v" + __version__ + " starting")
         self.check_first_run()
 
         # Create user backup config file list
