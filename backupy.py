@@ -52,7 +52,7 @@ def stripDashAtEnd(endinglist):
     return endinglist
 
 
-def dotForEndings(endinglist):
+def dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith("."):
             endinglist[idx] = "." + elem
@@ -123,7 +123,7 @@ def get_configs_userbackup(config_file):
 
                 ll = cfghandler.get(section, 'exclude_endings', raw=False)
                 bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
+                bconfig['exclude_endings'] = dot_for_endings(bconfig['exclude_endings'])
 
                 ll = cfghandler.get(section, 'exclude_files', raw=False)
                 bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
@@ -165,7 +165,7 @@ def get_configs_global(config_file):
 
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
         bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
+        bconfig['exclude_endings'] = dot_for_endings(bconfig['exclude_endings'])
 
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
@@ -181,13 +181,13 @@ def get_configs_global(config_file):
         sys.exit(1)
     except OSError as oerr:
         printError("OSError: %s" % config_file)
-        printError("%s (%s)" % (oerr.message, str(oerr.errno)))
+        printError("%s (%s)" % (oerr.strerror, str(oerr.errno)))
         sys.exit(1)
     else:
         return bconfig
 
 
-def checkPythonVersion():
+def check_python_version():
     try:
         assert sys.version_info >= (3, 4)
     except AssertionError:
@@ -386,8 +386,10 @@ class Backupy:
                 printError("Exiting")
                 sys.exit(1)
 
-            # TODO: Implement "follow symlinks" option!
-            archive = tarfile.open(filepath, mode)
+            # http://stackoverflow.com/a/39321142/4325232
+            dereference = True if bckentry['followsym'] == "yes" else False
+            archive = tarfile.open(filepath, mode=mode, dereference=dereference)
+
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dirs']:
                     archive.add(entry, filter=self.filter_tar)
@@ -479,7 +481,7 @@ class Backupy:
 
 
 def main():
-    checkPythonVersion()
+    check_python_version()
     backupy = Backupy()
     backupy.read_configs()
     backupy.execute_backups()
