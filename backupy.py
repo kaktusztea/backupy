@@ -57,6 +57,8 @@ def dotForEndings(endinglist):
 
 
 def create_config_file(config_file_path):
+    # TODO: store config lines in a fix order
+    # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
     filehandler = ""
     cfghandler = configparser.ConfigParser()
     cfghandler['GLOBAL_EXCLUDES'] = {'EXCLUDE_ENDINGS': '~, swp',
@@ -366,6 +368,7 @@ class Backupy:
                 printLog("Wrong 'withpath' config value! Should be \"YES\" / \"NO\". Exiting.")
                 sys.exit(1)
         except (IOError, OSError) as err:
+            # TODO: it is not necessary handle every type of exception. Just write 'errno' and 'strerror'
             if err.errno == errno.EACCES:
                 # printLog("OSError: Permission denied on %s" % filepath)
                 printLog("OSError: %s on %s" % (os.strerror(err.errno), filepath))
@@ -384,14 +387,16 @@ class Backupy:
             filesize = os.path.getsize(filepath)
             printLog("Done [%s]" % sizeof_fmt(filesize))
 
-    def compress_zip(self, t, bobject):           # TODO: full obsolete, rewrite, refactor!
+    def compress_zip(self, bckentry):
         """ Compressing with zip method """
-        dirpath = bobject['pathcompress'] + "/*"
-        filepath = os.path.join(t['path'], bobject['archive_name'])
+        # TODO: this is obsolete -> rewrite, refactor!
+        # http://stackoverflow.com/a/14569017
 
+        dirpath = bckentry['pathcompress'] + "/*"
+        filepath = bckentry['archivefullpath']
         try:
             archive = zipfile.ZipFile(filepath, mode="w")                   # TODO: filtering!
-            archive.comment = bobject['description']
+            archive.comment = bckentry['description']
             archive.write(dirpath, compress_type=compression)
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
@@ -434,8 +439,8 @@ class Backupy:
                 print("%s Starting backup" % getTime())
                 if mode == "tar" or mode == "targz":
                     self.compress_tar(cfentry)
-                # elif mode == "zip":
-                #     compress_zip(target, backupentry)
+                elif mode == "zip":
+                    self.compress_zip(cfentry)
                 else:
                     printLog("Wrong method type. Exiting.")
                     sys.exit(1)
