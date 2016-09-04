@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import re
 import os
 import sys
 import errno
 import ntpath
 import tarfile
+import zipfile
 import datetime
 import configparser
-import zipfile
 try:
     import zlib
     compression = zipfile.ZIP_DEFLATED
-except:
+except ImportError:
     compression = zipfile.ZIP_STORED
 
 __author__ = 'kaktusz'
@@ -55,75 +56,122 @@ def dotForEndings(endinglist):
     return endinglist
 
 
+def create_config_file(config_file_path):
+    filehandler = ""
+    cfghandler = configparser.ConfigParser()
+    cfghandler['GLOBAL_EXCLUDES'] = {'EXCLUDE_ENDINGS': '~, swp',
+                                     'EXCLUDE_FILES': 'Thumbs.db, abcdefgh.txt',
+                                     'EXCLUDE_DIRS': 'my_globaly_exclude_dir'}
+    for i in range(1, 4):
+        cfghandler['BACKUP'+str(i)] = {'NAME': 'Document backup' + str(i),
+                                       'ENABLED': 'FALSE',
+                                       'ARCHIVE_NAME': 'document_backup' + str(i),
+                                       'RESULT_DIR': '/home/joe/mybackups',
+                                       'METHOD': 'targz',
+                                       'FOLLOWSYM': 'yes',
+                                       'WITHPATH': 'no',
+                                       'INCLUDE_DIRS': '/home/joe/humour, /home/joe/novels',
+                                       'EXCLUDE_DIRS': 'garbage, temp',
+                                       'EXCLUDE_ENDINGS': '~, gif, jpg, bak',
+                                       'EXCLUDE_FILES': 'abc.log, Thumbs.db'}
+    try:
+        filehandler = open(config_file_path, "w")
+        cfghandler.write(filehandler, space_around_delimiters=True)
+    except OSError as err:
+        printLog("Cannot create config file: %s" % config_file_path)
+        printLog("Error: %s" % err.strerror)
+        sys.exit(1)
+    finally:
+        filehandler.close()
+
+
 def getBackupConfigs(configfile):
     if not os.path.exists(configfile):
         print("Config file does not exists.")
         sys.exit(1)
 
-    bconfig = {}
+    allconfigs = {}
     conffile = configparser.ConfigParser()
     try:
         conffile.read(configfile)
-        bconfig['sections'] = conffile.sections()
-        bconfig['enabled'] = conffile.get('backupentry', 'ENABLED', raw=False)
-        bconfig['name'] = conffile.get('backupentry', 'NAME', raw=False)
-        bconfig['archive_name'] = conffile.get('backupentry', 'ARCHIVE_NAME', raw=False)
+        section_list = conffile.sections()
+        pattern = re.compile("BACKUP[0-9]{1,2}$")
+        for section in section_list:
+            if pattern.match(section):
+                bconfig = {}
+                bconfig['enabled'] = conffile.get(section, 'enabled', raw=False)
+                bconfig['name'] = conffile.get(section, 'name', raw=False)
+                bconfig['archive_name'] = conffile.get(section, 'archive_name', raw=False)
 
-        bconfig['result_dir'] = conffile.get('backupentry', 'RESULT_DIR', raw=False)
-        bconfig['method'] = conffile.get('backupentry', 'METHOD', raw=False)
-        bconfig['followsym'] = conffile.get('backupentry', 'FOLLOWSYM', raw=False)
-        bconfig['withpath'] = conffile.get('backupentry', 'WITHPATH', raw=False)
+                bconfig['result_dir'] = conffile.get(section, 'result_dir', raw=False)
+                bconfig['method'] = conffile.get(section, 'method', raw=False)
+                bconfig['followsym'] = conffile.get(section, 'followsym', raw=False)
+                bconfig['withpath'] = conffile.get(section, 'withpath', raw=False)
 
-        ll = conffile.get('backupentry', 'INCLUDE_DIRS', raw=False)
-        bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
-        bconfig['include_dirs'] = stripDashAtEnd(bconfig['include_dirs'])
+                ll = conffile.get(section, 'include_dirs', raw=False)
+                bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
+                bconfig['include_dirs'] = stripDashAtEnd(bconfig['include_dirs'])
 
-        ll = conffile.get('backupentry', 'EXCLUDE_DIRS', raw=False)
-        bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
+                ll = conffile.get(section, 'exclude_dirs', raw=False)
+                bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
+                bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
 
-        ll = conffile.get('backupentry', 'EXCLUDE_ENDINGS', raw=False)
-        bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
+                ll = conffile.get(section, 'exclude_endings', raw=False)
+                bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
+                bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
 
-        ll = conffile.get('backupentry', 'EXCLUDE_FILES', raw=False)
-        bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+                ll = conffile.get(section, 'exclude_files', raw=False)
+                bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
-        bconfig = stripHashInDictValues(bconfig)
-        if checkIfContainsSpaces(bconfig['archive_name']):
-            raise configparser.Error("Space in archive name is not allowed.")
+                bconfig = stripHashInDictValues(bconfig)
+                if checkIfContainsSpaces(bconfig['archive_name']):
+                    raise configparser.Error("Space in archive name is not allowed.")
+
+                bconfig['archivefullpath'] = 'replace_this'
+                if bconfig['method'] == 'tar':
+                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
+                elif bconfig['method'] == 'targz':
+                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
+                elif bconfig['method'] == 'zip':
+                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
+                else:
+                    printLog("Error: wrong compression method declared in section %s" % section)
+                    printLog("Valid: method = { tar ; targz ; zip}")
+                    printLog("Exiting")
+                    sys.exit(1)
+                allconfigs[section] = bconfig
 
     except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
         print("Invalid config file: %s" % configfile)
         print("Error: %s" % err.message)
         sys.exit(1)
     else:
-        return bconfig
+        return allconfigs
 
 
-def getGlobalConfigs(globalconfig):
+def getGlobalConfigs(config_file):
     bconfig = {}
-    conffile = configparser.ConfigParser()
+    cfghandler = configparser.ConfigParser()
     try:
-        conffile.read(globalconfig)
-        bconfig['sections'] = conffile.sections()
+        cfghandler.read(config_file)
+        bconfig['sections'] = cfghandler.sections()
 
-        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_ENDINGS', raw=False)
+        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
         bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
         bconfig['exclude_endings'] = dotForEndings(bconfig['exclude_endings'])
 
-        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_FILES', raw=False)
+        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
-        ll = conffile.get('BACKUPY_GLOBALS', 'EXCLUDE_DIRS', raw=False)
+        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dirs', raw=False)
         bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
         bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
 
         bconfig = stripHashInDictValues(bconfig)
 
     except configparser.NoSectionError as err:
-        print("Global config file syntax error: %s" % globalconfig)
-        print("Error: %s" % err.message)
+        printLog("Global config file syntax error: %s" % config_file)
+        printLog("Error: %s" % err.message)
         sys.exit(1)
     else:
         return bconfig
@@ -188,14 +236,30 @@ class Backupy:
     def __init__(self):
         self.home_path = os.path.expanduser("~")
         self.path_configdir = self.home_path + '/.config/backupy'
-        self.path_config_global = self.path_configdir + '/globals.cfg'
+        self.path_config_file = self.path_configdir + '/backupy.cfg'
+        # self.path_config_global = self.path_configdir + '/globals.cfg'
         self.path_config_entry_list = []
 
-        self.config_global = ""
+        self.configs_global = ""
         self.configs_user = {}
         self.cfg_actual = ''
 
         self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
+
+    @staticmethod
+    def help():
+        print("[BACKUP1]                            # Mandatory name pattern: BACKUP[0-9]  ; don't write anything after the number\n"
+              "NAME = Document backup               # write entry name here\n"
+              "ENABLED = TRUE                       # is this backup active. {TRUE, FALSE}\n"
+              "ARCHIVE_NAME = document_backup       # archive file name without extension\n"
+              "RESULT_DIR = /home/joe/mybackups     # Where to create the archive file\n"
+              "METHOD = targz                       # Compression method {tar, targz, zip}\n"
+              "FOLLOWSYM = yes                      # Should compressor follow symlinks\n"
+              "WITHPATH = no                       # compress files with or without full path\n"
+              "INCLUDE_DIRS = /home/joe/humour, /home/joe/novels   # list of included directories\n"
+              "EXCLUDE_DIRS = garbage, temp         # list of excluded directories\n"
+              "EXCLUDE_ENDINGS = ~, gif, jpg, bak   # excluded file extension types\n"
+              "EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames")
 
     def firstRun(self):
         if not os.path.exists(self.home_path):
@@ -210,96 +274,66 @@ class Backupy:
                 printLog("Error: %s" % err.strerror)
                 sys.exit(1)
 
-        if not os.path.exists(self.path_config_global):
-            samplecfgfile = self.path_configdir + "/mybackup.cfg.sample"
+        if not os.path.exists(self.path_config_file):
             printLog("First run!")
-            printLog("Generating global configs: %s" % self.path_config_global)
-            try:
-                fhg = open(self.path_config_global, "w")
-                fhg.write("[BACKUPY_GLOBALS]\n\
-EXCLUDE_ENDINGS = .bak, .swp\n\
-EXCLUDE_FILES = Thumbs.db, faja.txt\n\
-EXCLUDE_DIRS = myexcldirg_global\n")
-                fhg.close()
-                del fhg
-            except OSError as err:
-                printLog("Cannot create global config: %s" % self.path_config_global)
-                printLog("Error: %s" % err.strerror)
-                sys.exit(1)
-
-            printLog("Generating sample backup config: %s" % samplecfgfile)
-            try:
-                fhg = open(samplecfgfile, "w")
-                fhg.write("[backupentry]\n\
-NAME = Document backup               # write entry name here\n\
-ENABLED = true                       # is this backup active. {TRUE, FALSE}\n\
-ARCHIVE_NAME = document_backup       # archive file name without extension\n\
-RESULT_DIR = /home/joe/mybackups     # Where to create the archive file\n\
-METHOD = targz                       # Compression method {tar, targz, zip}\n\
-FOLLOWSYM = yes                      # Should compressor follow symlinks\n\
-WITHPATH = no                       # compress files with or without full path\n\
-INCLUDE_DIRS = /home/joe/humour, /home/joe/novels   # list of included directories\n\
-EXCLUDE_DIRS = garbage, temp         # list of excluded directories\n\
-EXCLUDE_ENDINGS = ~, gif, jpg, bak   # excluded file extension types\n\
-EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames\n")
-                fhg.close()
-            except OSError as err:
-                printLog("Cannot create sample backup config: %s" % self.path_config_global)
-                printLog("Error: %s" % err.strerror)
-                sys.exit(1)
-
+            printLog("Generating config file: %s" % self.path_config_file)
+            create_config_file(self.path_config_file)
             printLog("---------------------------------------------------------------")
-            printLog("Now you can create user specified backup entries in %s" % self.path_configdir)
-            printLog("Copy sample file above as many times as you want and customize!")
-            printLog("Important: User backup config files' extension should be .cfg")
+            printLog("Now you can create user specified backup entries in %s" % self.path_config_file)
+            printLog("Don't forget to set 'ENABLED' to 'True' if you want a backup entry to be active!")
             sys.exit(0)
 
-    @staticmethod
-    def getConfigList(dirname):
-        """ Filters config file list: only user configs """
-        blacklist = ['globals.cfg', '.sample']
-        files = [os.path.join(dirname, f) for f in os.listdir(dirname)
-                 if os.path.isfile(os.path.join(dirname, f))
-                 and not any(f.endswith(ext) for ext in blacklist)]
-        return files
+    # @staticmethod
+    # def getConfigList(dirname):
+    #     """ Filters config file list: only user configs """
+    #     blacklist = ['globals.cfg', '.sample']
+    #     files = [os.path.join(dirname, f) for f in os.listdir(dirname)
+    #              if os.path.isfile(os.path.join(dirname, f))
+    #              and not any(f.endswith(ext) for ext in blacklist)]
+    #     return files
 
-    def filter_general(self, tarinfo):
+    def filter_tar(self, tarinfo):
         """ filter function for tar creation - general and custom """
         # It works, only PEP8 shows warnings
         # http://stackoverflow.com/questions/23962434/pycharm-expected-type-integral-got-str-instead
-        if tarinfo.name.endswith(tuple(self.config_global['exclude_endings'])):
+        if tarinfo.name.endswith(tuple(self.configs_global['exclude_endings'])):
             return None
         elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             return None
 
         #  It works, only PEP8 shows warnings
-        elif path_leaf(tarinfo.name) in self.config_global['exclude_files']:
+        elif path_leaf(tarinfo.name) in self.configs_global['exclude_files']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
             return None
 
         #  It works, only PEP8 shows warnings
         # TODO: WITHPATH==FALSE -> works;  WITHPATH==TRUE -> doesn't work
-        elif path_leaf(tarinfo.name) in self.config_global['exclude_dirs']:
+        elif path_leaf(tarinfo.name) in self.configs_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
             return None
         else:
             return tarinfo
 
-    def compress_pre(self, path_target_dir, bckentry):
+    @staticmethod
+    def compress_pre(path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
 
         if bckentry['enabled'].lower() != "true":
-            printLog("Backup entry \"%s\" is DISABLED, SKIPPING." % bckentry['name'])
+            printLog("--------------------------------------------------")
+            printLog("Backup entry \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
             return False
         if os.path.isfile(filepath):
+            printLog("--------------------------------------------------")
+            printLog("Executing backup '%s'" % bckentry['name'])
             printLog("There is already an archive with this name: %s" % filepath)
             printLog("Skipping")
             return False
         else:
+            printLog("--------------------------------------------------")
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
@@ -324,10 +358,10 @@ EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames\n")
             archive = tarfile.open(filepath, mode)
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dirs']:
-                    archive.add(entry, filter=self.filter_general)
+                    archive.add(entry, filter=self.filter_tar)
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dirs']:
-                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
+                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_tar)
             else:
                 printLog("Wrong 'withpath' config value! Should be \"YES\" / \"NO\". Exiting.")
                 sys.exit(1)
@@ -377,36 +411,19 @@ EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames\n")
             filesize = os.path.getsize(filepath)
             printLog("Done [%s]" % sizeof_fmt(filesize))
 
-    def init(self):
+    def read_configs(self):
         printLog("backupy starting")
         self.firstRun()
 
         # Create user backup config file list
-        self.config_global = getGlobalConfigs(self.path_config_global)
-        self.path_config_entry_list = self.getConfigList(self.path_configdir)
-        if not self.path_config_entry_list:
-            printLog("---------------------------------------------------------------")
-            printLog("You don't have any user backup config in %s" % self.path_configdir)
-            printLog("Copy sample file there - as many times as you want - and customize!")
-            printLog("Important: User backup config files' extension should be .cfg")
-            sys.exit(1)
+        self.configs_global = getGlobalConfigs(self.path_config_file)
+        self.configs_user = getBackupConfigs(self.path_config_file)
 
-        # Read user backup config files in iteration
-        for cfpath in self.path_config_entry_list:
-            leaf = path_leaf(cfpath)
-            self.configs_user[leaf] = getBackupConfigs(cfpath)
-            self.configs_user[leaf]['archivefullpath'] = 'replace_this'
-            if self.configs_user[leaf]['method'] == 'tar':
-                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
-            elif self.configs_user[leaf]['method'] == 'targz':
-                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
-            elif self.configs_user[leaf]['method'] == 'zip':
-                self.configs_user[leaf]['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
-            else:
-                printLog("Error: wrong compression method declared in cfg file: %s" % leaf)
-                printLog("Valid: METHOD = { tar ; targz ; zip}")
-                printLog("Exiting")
-                sys.exit(1)
+        if self.configs_user is False:
+            printLog("---------------------------------------------------------------")
+            printLog("You don't have any active user backup entries in %s" % self.path_config_file)
+            printLog("Exiting.")
+            sys.exit(1)
 
     def execute_backups(self):
         for cfname, cfentry in self.configs_user.items():
@@ -422,12 +439,14 @@ EXCLUDE_FILES = abc.log, Thumbs.db   # excluded filenames\n")
                 else:
                     printLog("Wrong method type. Exiting.")
                     sys.exit(1)
+        printLog("--------------------------------------------------")
+        printLog("backupy finished")
 
 
 def main():
     checkPythonVersion()
     backupy = Backupy()
-    backupy.init()
+    backupy.read_configs()
     backupy.execute_backups()
 
 
