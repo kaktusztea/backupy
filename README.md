@@ -6,16 +6,16 @@
 * unique backup entries in backup sets (up to 99)
 * global exclude lists (file, dir, filetype) for entire backup set
 * every backup entry is customizable
- * enabled / disabled
- * archive file name
- * compression method (tar, targz, zip)
- * store files/directories with/without full path
- * follow symlinks
- * include directories
- * exclude directories
- * exclude filenames
- * exclude filetypes
- * result dir
+    * enabled / disabled
+    * archive file name
+    * compression method (tar, targz, zip)
+    * store files/directories with/without full path
+    * follow symlinks
+    * include directories
+    * exclude directories
+    * exclude filenames
+    * exclude filetypes
+    * result dir
  
 ## Basics ##
 
