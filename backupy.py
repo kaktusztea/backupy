@@ -486,7 +486,7 @@ class Backupy:
                             elif bckentry['withpath'] == 'no':
                                 # TODO:
                                 # dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
-                                dirpart = ""  # TODO
+                                dirpart = ""  # TODO:   def getsub_dir_path(root, entry)
                                 additem = os.path.join(dirpart + filename)
                                 archive.write(filename=os.path.join(root, filename), arcname=additem, compress_type=zcompression)
                             else:
