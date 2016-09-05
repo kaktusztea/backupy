@@ -38,19 +38,19 @@ def stripHashInDictValues(mydict):
     return mydict
 
 
-def checkIfContainsSpaces(line):
-    if " " in line:
-        return True
-    else:
-        return False
-
-
 def stripDashAtEnd(endinglist):
     for idx, elem in enumerate(endinglist):
         while elem.endswith("/"):
             elem = elem[:-1]
         endinglist[idx] = elem
     return endinglist
+
+
+def checkIfContainsSpaces(line):
+    if " " in line:
+        return True
+    else:
+        return False
 
 
 def dot_for_endings(endinglist):
@@ -70,7 +70,7 @@ def create_config_file(config_file_path):
                                      'exclude_dirs': 'my_globaly_exclude_dir'}
     for i in range(1, 4):
         cfghandler['BACKUP'+str(i)] = {'name': 'Document backup' + str(i),
-                                       'enabled': 'false',
+                                       'enabled': 'no',
                                        'archive_name': 'document_backup' + str(i),
                                        'result_dir': '/home/joe/mybackups',
                                        'method': 'targz',
@@ -289,7 +289,7 @@ class Backupy:
               "   exclude_dirs = trash, garbage        # list of globally excluded directories\n\n"
               "   [BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
               "   name = My Document backup            # write entry name here\n"
-              "   enabled = true                       # is this backup active. {true, false}\n"
+              "   enabled = yes                        # is this backup active. {yes, no}\n"
               "   archive_name = document_backup       # archive file name without extension\n"
               "   result_dir = /home/joe/mybackups     # Where to create the archive file\n"
               "   method = targz                       # Compression method {tar, targz, zip}\n"
@@ -321,7 +321,7 @@ class Backupy:
             printLog("---------------------------------------------------------------")
             printLog("Now you can create user specified backup entries in %s" % self.path_default_config_file)
             printLog("Also you can create custom user specified backup set config file(s) - called as command line parameter.")
-            printLog("Don't forget to set 'ENABLED' to 'True' if you want a backup entry to be active!")
+            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!")
             sys.exit(0)
 
     def filter_tar(self, tarinfo):
@@ -333,13 +333,13 @@ class Backupy:
         elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             return None
 
-        #  It works, only PEP8 shows warnings
+        #  It works, only Pycharm-PEP8 shows warnings
         elif path_leaf(tarinfo.name) in self.configs_global['exclude_files']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
             return None
 
-        #  It works, only PEP8 shows warnings
+        #  It works, only Pycharm-PEP8 shows warnings
         elif path_leaf(tarinfo.name) in self.configs_global['exclude_dirs']:
             return None
         elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
@@ -347,9 +347,28 @@ class Backupy:
         else:
             return tarinfo
 
-    def filter_zip(self, zip_something):
-        # TODO: maybe needed (it'd be good)
-        pass
+    def filter_zip(self, filename):
+        # fn = os.path.join(base, file)
+        # zfile.write(fn, fn[rootlen:])
+        if filename.endswith(tuple(self.configs_global['exclude_endings'])):
+            return False
+        elif filename.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
+            return False
+
+        #  It works, only Pycharm-PEP8 shows warnings
+        elif path_leaf(filename) in self.configs_global['exclude_files']:
+            return False
+        elif path_leaf(filename) in self.configs_user[self.cfg_actual]['exclude_files']:
+            return False
+
+        #  It works, only Pycharm-PEP8 shows warnings
+        # TODO: No exclusion accidentaly!!
+        elif path_leaf(filename) in self.configs_global['exclude_dirs']:
+            return False
+        elif path_leaf(filename) in self.configs_user[self.cfg_actual]['exclude_dirs']:
+            return False
+        else:
+            return True
 
     @staticmethod
     def compress_pre(path_target_dir, bckentry):
@@ -357,7 +376,7 @@ class Backupy:
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
 
-        if bckentry['enabled'].lower() != "true":
+        if bckentry['enabled'].lower() != "yes":
             printLog("--------------------------------------------------")
             printLog("Backup entry \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
             return False
@@ -377,6 +396,8 @@ class Backupy:
 
     def compress_tar(self, bckentry):
         """ Compressing with tar/targz method """
+
+        archive = ""
         filepath = bckentry['archivefullpath']
         try:
             mode = ""
@@ -400,7 +421,7 @@ class Backupy:
                 for entry in bckentry['include_dirs']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_tar)
             else:
-                printError("Wrong 'withpath' config value! Should be \"YES\" / \"NO\". Exiting.")
+                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                 sys.exit(1)
         except (IOError, OSError) as err:
             # TODO: it is not necessary handle every type of exception. Just write 'errno' and 'strerror'
@@ -417,10 +438,10 @@ class Backupy:
             else:
                 printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
                 sys.exit(99)
-        else:
+        finally:
             archive.close()
-            filesize = os.path.getsize(filepath)
-            printLog("Done [%s]" % sizeof_fmt(filesize))
+        filesize = os.path.getsize(filepath)
+        printLog("Done [%s]" % sizeof_fmt(filesize))
 
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
@@ -434,6 +455,20 @@ class Backupy:
         # http://stackoverflow.com/a/14569017
         # http://stackoverflow.com/a/459419/4325232
 
+        # file = os.path.join(os.getcwd(), os.listdir(os.getcwd())[0])
+        # file
+        # os.path.dirname(file)  ## directory of file
+        # os.path.dirname(os.path.dirname(file))  ## directory of directory of file
+
+        # dir = os.path.dirname(os.path.dirname(file))  ## dir of dir of file
+        # ## once you're at the directory level you want, with the desired directory as the final path node:
+        # dirname1 = os.path.basename(dir)
+        # dirname2 = os.path.split(dir)[
+        #     1]  ## if you look at the documentation, this is exactly what os.path.basename does.
+
+
+        # TODO: Exclude def: only with full path in .cfg file!!
+
         archive = ""
         filepath = bckentry['archivefullpath']
         try:
@@ -441,10 +476,22 @@ class Backupy:
             # archive.comment = bckentry['description']
             for entry in bckentry['include_dirs']:
                 for root, dirs, files in os.walk(top=entry, followlinks=True):
-                    for file in files:
-                        # fn = os.path.join(base, file)
-                        # zfile.write(fn, fn[rootlen:])
-                        archive.write(filename=os.path.join(root, file), arcname=root+sep+file, compress_type=zcompression)
+                    for filename in files:
+                        # dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
+                        # ff == self.filter_zip(os.path.join(root, filename)) if bckentry['withpath'] == 'yes' else self.filter_zip(os.path.join(dirpart + filename))
+                        # if ff:
+                        if self.filter_zip(os.path.join(root, filename)):
+                            if bckentry['withpath'] == 'yes':
+                                archive.write(filename=os.path.join(root, filename), compress_type=zcompression)
+                            elif bckentry['withpath'] == 'no':
+                                # TODO:
+                                # dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
+                                dirpart = ""  # TODO
+                                additem = os.path.join(dirpart + filename)
+                                archive.write(filename=os.path.join(root, filename), arcname=additem, compress_type=zcompression)
+                            else:
+                                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
+                                sys.exit(1)
 
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
