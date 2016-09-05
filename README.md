@@ -68,6 +68,11 @@ vi /my/path/mybackup.cfg
 ```
 
 ## Contact ##
-If you have comments, or just want explain how awesome this scrip is :) - write a mail:
+If you have comments, or just want explain how awesome this script is :) - write a mail:
+
+
+```
+#!bash
 
 kaktusztea _ at_ protonmail _ dot_ ch
+```
