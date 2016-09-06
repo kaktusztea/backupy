@@ -24,21 +24,27 @@ colorreset = '\033[0m'
 sep = os.path.sep
 
 
-def stripHashAtEnd(line):
+def strip_hash_string_end(line):
     return line.split("#")[0].rstrip()
 
 
-def stripHashInDictValues(mydict):
+def strip_dash_string_end(line):
+    while line.endswith("/"):
+        line = line[:-1]
+    return line
+
+
+def strip_hash_on_dict_values(mydict):
     for idx, mylist in mydict.items():
         if isinstance(mylist, list):
             for lidx, elem in enumerate(mylist):
-                mydict[idx][lidx] = stripHashAtEnd(elem)
+                mydict[idx][lidx] = strip_hash_string_end(elem)
         else:
-            mydict[idx] = stripHashAtEnd(mylist)
+            mydict[idx] = strip_hash_string_end(mylist)
     return mydict
 
 
-def stripDashAtEnd(endinglist):
+def strip_enddash_on_list(endinglist):
     for idx, elem in enumerate(endinglist):
         while elem.endswith("/"):
             elem = elem[:-1]
@@ -46,14 +52,14 @@ def stripDashAtEnd(endinglist):
     return endinglist
 
 
-def checkIfContainsSpaces(line):
+def check_string_contains_spaces(line):
     if " " in line:
         return True
     else:
         return False
 
 
-def dot_for_endings(endinglist):
+def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith("."):
             endinglist[idx] = "." + elem
@@ -116,32 +122,32 @@ def get_configs_userbackup(config_file):
 
                 ll = cfghandler.get(section, 'include_dirs', raw=False)
                 bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
-                bconfig['include_dirs'] = stripDashAtEnd(bconfig['include_dirs'])
+                bconfig['include_dirs'] = strip_enddash_on_list(bconfig['include_dirs'])
 
                 ll = cfghandler.get(section, 'exclude_dirs', raw=False)
                 bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
+                bconfig['exclude_dirs'] = strip_enddash_on_list(bconfig['exclude_dirs'])
 
                 ll = cfghandler.get(section, 'exclude_endings', raw=False)
                 bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_endings'] = dot_for_endings(bconfig['exclude_endings'])
+                bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
 
                 ll = cfghandler.get(section, 'exclude_files', raw=False)
                 bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
-                bconfig = stripHashInDictValues(bconfig)
-                if checkIfContainsSpaces(bconfig['archive_name']):
+                bconfig = strip_hash_on_dict_values(bconfig)
+                if check_string_contains_spaces(bconfig['archive_name']):
                     printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
                     printError("Exiting")
                     sys.exit(1)
 
                 bconfig['archivefullpath'] = 'replace_this'
                 if bconfig['method'] == 'tar':
-                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar'
+                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar'
                 elif bconfig['method'] == 'targz':
-                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.tar.gz'
+                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
                 elif bconfig['method'] == 'zip':
-                    bconfig['archive_name'] += '_' + getDate() + '_' + getTimeShort() + '.zip'
+                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.zip'
                 else:
                     printError("Error: wrong compression method declared in section %s" % section)
                     printError("Valid: method = { tar ; targz ; zip}")
@@ -166,16 +172,16 @@ def get_configs_global(config_file):
 
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
         bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_endings'] = dot_for_endings(bconfig['exclude_endings'])
+        bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
 
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dirs', raw=False)
         bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_dirs'] = stripDashAtEnd(bconfig['exclude_dirs'])
+        bconfig['exclude_dirs'] = strip_enddash_on_list(bconfig['exclude_dirs'])
 
-        bconfig = stripHashInDictValues(bconfig)
+        bconfig = strip_hash_on_dict_values(bconfig)
     except configparser.Error as err:
         printError("Config file syntax error: %s" % config_file)
         printError("%s" % err.message)
@@ -197,25 +203,25 @@ def check_python_version():
         sys.exit(1)
 
 
-def path_leaf(path):
+def get_leaf_from_path(path):
     """ get filename only from path """
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
 
 
-def getDate():
+def get_date():
     now = datetime.datetime.now()
     nowstr = '%04d-%02d-%02d' % (now.year, now.month, now.day)
     return nowstr
 
 
-def getTime():
+def get_time():
     now = datetime.datetime.now()
     nowstr = '[%02d:%02d:%02d]' % (now.hour, now.minute, now.second)
     return nowstr
 
 
-def getTimeShort():
+def get_time_short():
     """ http://stackoverflow.com/a/1094933 """
     now = datetime.datetime.now()
     nowstr = '%02d%02d' % (now.hour, now.minute)
@@ -223,7 +229,7 @@ def getTimeShort():
 
 
 def printLog(log):
-    pp = getTime() + " " + str(log)
+    pp = get_time() + " " + str(log)
     print(pp)
 
 
@@ -240,7 +246,7 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 
-def getFreeSpace(dirname):
+def get_free_space(dirname):
     """ returns directory's free space in human readable format """
     st = os.statvfs(dirname)
     return sizeof_fmt(st.f_bavail * st.f_frsize)
@@ -305,7 +311,6 @@ class Backupy:
         if not os.path.exists(self.home_path):
             printError("Can not access home directory: %s" % self.home_path)
             sys.exit(1)
-
         if not os.path.exists(self.path_default_configdir):
             try:
                 os.mkdir(self.path_default_configdir)
@@ -313,7 +318,6 @@ class Backupy:
                 printError("Cannot create user config dir: %s" % self.path_default_configdir)
                 printError("%s" % err.strerror)
                 sys.exit(1)
-
         if not os.path.exists(self.path_default_config_file):
             printLog("First run!")
             printLog("Generating default config file: %s" % self.path_default_config_file)
@@ -334,38 +338,38 @@ class Backupy:
             return None
 
         #  It works, only Pycharm-PEP8 shows warnings
-        elif path_leaf(tarinfo.name) in self.configs_global['exclude_files']:
+        elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_files']:
             return None
-        elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
+        elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
             return None
 
         #  It works, only Pycharm-PEP8 shows warnings
-        elif path_leaf(tarinfo.name) in self.configs_global['exclude_dirs']:
+        elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_dirs']:
             return None
-        elif path_leaf(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
+        elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
             return None
         else:
             return tarinfo
 
-    def filter_zip(self, filename):
+    def filter_zip(self, filenamefull, bckentry):
         # fn = os.path.join(base, file)
         # zfile.write(fn, fn[rootlen:])
-        if filename.endswith(tuple(self.configs_global['exclude_endings'])):
+        if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
             return False
-        elif filename.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
+        elif filenamefull.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             return False
 
         #  It works, only Pycharm-PEP8 shows warnings
-        elif path_leaf(filename) in self.configs_global['exclude_files']:
+        elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
             return False
-        elif path_leaf(filename) in self.configs_user[self.cfg_actual]['exclude_files']:
+        elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_files']:
             return False
 
         #  It works, only Pycharm-PEP8 shows warnings
         # TODO: No exclusion accidentaly!!
-        elif path_leaf(filename) in self.configs_global['exclude_dirs']:
+        elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_dirs']:
             return False
-        elif path_leaf(filename) in self.configs_user[self.cfg_actual]['exclude_dirs']:
+        elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_dirs']:
             return False
         else:
             return True
@@ -391,7 +395,7 @@ class Backupy:
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
-            printLog("Free space in target dir: %s" % getFreeSpace(path_target_dir))
+            printLog("Free space in target dir: %s" % get_free_space(path_target_dir))
         return True
 
     def compress_tar(self, bckentry):
@@ -443,6 +447,17 @@ class Backupy:
         filesize = os.path.getsize(filepath)
         printLog("Done [%s]" % sizeof_fmt(filesize))
 
+    def getsub_dir_path(self, root, entry):
+        ### dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
+        # root = /local/scratch/ebalife/test/source/elso/tizenegy
+        # entry = /local/scratch/ebalife/test/source/
+        # return "elso/tizenegy"
+
+        # use strip_dash_string_end(mydir)
+        # pathstr = line.split("/")[:-1]
+        # return '/' + os.path.join(*pathstr)
+        pass
+
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
         # TODO: adding multiple directories
@@ -477,18 +492,12 @@ class Backupy:
             for entry in bckentry['include_dirs']:
                 for root, dirs, files in os.walk(top=entry, followlinks=True):
                     for filename in files:
-                        # dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
-                        # ff == self.filter_zip(os.path.join(root, filename)) if bckentry['withpath'] == 'yes' else self.filter_zip(os.path.join(dirpart + filename))
-                        # if ff:
-                        if self.filter_zip(os.path.join(root, filename)):
+                        dirpart = self.getsub_dir_path(root, entry)    # TODO
+                        if self.filter_zip(os.path.join(root, filename), bckentry):    # TODO
                             if bckentry['withpath'] == 'yes':
                                 archive.write(filename=os.path.join(root, filename), compress_type=zcompression)
                             elif bckentry['withpath'] == 'no':
-                                # TODO:
-                                # dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
-                                dirpart = ""  # TODO:   def getsub_dir_path(root, entry)
-                                additem = os.path.join(dirpart + filename)
-                                archive.write(filename=os.path.join(root, filename), arcname=additem, compress_type=zcompression)
+                                archive.write(filename=os.path.join(root, filename), arcname=os.path.join(dirpart, filename), compress_type=zcompression)
                             else:
                                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                                 sys.exit(1)
@@ -531,7 +540,7 @@ class Backupy:
             mode = cfentry['method']
 
             if self.compress_pre(cfentry['result_dir'], cfentry):
-                print("%s Starting backup" % getTime())
+                print("%s Starting backup" % get_time())
                 if mode == "tar" or mode == "targz":
                     self.compress_tar(cfentry)
                 elif mode == "zip":
