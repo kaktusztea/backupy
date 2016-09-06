@@ -34,6 +34,12 @@ def strip_dash_string_end(line):
     return line
 
 
+def strip_dash_string_start(line):
+    while line.startswith("/"):
+        line = line[1:]
+    return line
+
+
 def strip_hash_on_dict_values(mydict):
     for idx, mylist in mydict.items():
         if isinstance(mylist, list):
@@ -66,6 +72,17 @@ def add_dot_for_endings(endinglist):
     return endinglist
 
 
+def getsub_dir_path(root, entry):
+    if not root.startswith("/") or not entry.startswith("/"):
+        return False
+    root = strip_dash_string_end(root)
+    entry = strip_dash_string_end(entry)
+
+    len_entry = len(str.split(entry, '/'))
+    temp = root.split("/")[len_entry-1:]
+    return os.path.join(*temp)
+
+
 def create_config_file(config_file_path):
     # TODO: store config lines in a fix order
     # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
@@ -73,9 +90,9 @@ def create_config_file(config_file_path):
     cfghandler = configparser.ConfigParser()
     cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
                                      'exclude_files': 'Thumbs.db, abcdefgh.txt',
-                                     'exclude_dirs': 'my_globaly_exclude_dir'}
+                                     'exclude_dir_names': 'my_globaly_exclude_dir'}
     for i in range(1, 4):
-        cfghandler['BACKUP'+str(i)] = {'name': 'Document backup' + str(i),
+        cfghandler['BACKUP'+str(i)] = {'name': 'Document backup' + str(i) + '           # comments are allowed',
                                        'enabled': 'no',
                                        'archive_name': 'document_backup' + str(i),
                                        'result_dir': '/home/joe/mybackups',
@@ -83,7 +100,8 @@ def create_config_file(config_file_path):
                                        'followsym': 'yes',
                                        'withpath': 'no',
                                        'include_dirs': '/home/joe/humour, /home/joe/novels',
-                                       'exclude_dirs': 'garbage, temp',
+                                       'exclude_dir_names': 'garbage, temp',
+                                       'exclude_dir_fullpathes': '/home/joe/humour/saskabare, /home/joe/novels/bad_ones',
                                        'exclude_endings': '~, gif, jpg, bak',
                                        'exclude_files': 'abc.log, swp.db'}
     try:
@@ -124,9 +142,13 @@ def get_configs_userbackup(config_file):
                 bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
                 bconfig['include_dirs'] = strip_enddash_on_list(bconfig['include_dirs'])
 
-                ll = cfghandler.get(section, 'exclude_dirs', raw=False)
-                bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_dirs'] = strip_enddash_on_list(bconfig['exclude_dirs'])
+                ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
+                bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
+                bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
+
+                ll = cfghandler.get(section, 'exclude_dir_fullpathes', raw=False)
+                bconfig['exclude_dir_fullpathes'] = list(map(str.strip, ll.split(',')))
+                bconfig['exclude_dir_fullpathes'] = strip_enddash_on_list(bconfig['exclude_dir_fullpathes'])
 
                 ll = cfghandler.get(section, 'exclude_endings', raw=False)
                 bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
@@ -177,9 +199,9 @@ def get_configs_global(config_file):
         ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
         bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
-        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dirs', raw=False)
-        bconfig['exclude_dirs'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_dirs'] = strip_enddash_on_list(bconfig['exclude_dirs'])
+        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dir_names', raw=False)
+        bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
+        bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
 
         bconfig = strip_hash_on_dict_values(bconfig)
     except configparser.Error as err:
@@ -246,7 +268,7 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 
-def get_free_space(dirname):
+def get_dir_free_space(dirname):
     """ returns directory's free space in human readable format """
     st = os.statvfs(dirname)
     return sizeof_fmt(st.f_bavail * st.f_frsize)
@@ -292,7 +314,7 @@ class Backupy:
               "   [GLOBAL_EXCLUDES]                    # you can change options' values, but don't modify section name and option names!\n"
               "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
               "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
-              "   exclude_dirs = trash, garbage        # list of globally excluded directories\n\n"
+              "   exclude_dir_names = trash, garbage   # list of excluded directory names without path\n\n"
               "   [BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
               "   name = My Document backup            # write entry name here\n"
               "   enabled = yes                        # is this backup active. {yes, no}\n"
@@ -302,7 +324,8 @@ class Backupy:
               "   followsym = yes                      # Should compressor follow symlinks\n"
               "   withpath = no                        # compress files with or without full path\n"
               "   include_dirs = /home/joe/humour, /home/joe/novels   # list of included directories\n"
-              "   exclude_dirs = garbage, temp         # list of excluded directories\n"
+              "   exclude_dir_names = garbage, temp    # list of excluded directory names without path\n"
+              "   exclude_dir_fullpathes = /home/joe/humour/saskabare, /home/joe/novels/bad_ones  # list of excluded directories with full path\n"
               "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
               "Note: use of comment sign '#' is allowed - at the end of option lines\n")
@@ -344,10 +367,11 @@ class Backupy:
             return None
 
         #  It works, only Pycharm-PEP8 shows warnings
-        elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_dirs']:
+        if any(dirname in tarinfo.name.split("/") for dirname in self.configs_global['exclude_dir_names']):
             return None
-        elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_dirs']:
+        if any(dirname in tarinfo.name.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
             return None
+
         else:
             return tarinfo
 
@@ -366,11 +390,11 @@ class Backupy:
             return False
 
         #  It works, only Pycharm-PEP8 shows warnings
-        # TODO: No exclusion accidentaly!!
-        elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_dirs']:
-            return False
-        elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_dirs']:
-            return False
+        if any(dirname in filenamefull.split("/") for dirname in self.configs_global['exclude_dir_names']):
+            return None
+        if any(dirname in filenamefull.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
+            print("User exclude dir matched at: %s" % filenamefull)    # DEBUG
+            return None
         else:
             return True
 
@@ -395,7 +419,7 @@ class Backupy:
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
-            printLog("Free space in target dir: %s" % get_free_space(path_target_dir))
+            printLog("Free space in target dir: %s" % get_dir_free_space(path_target_dir))
         return True
 
     def compress_tar(self, bckentry):
@@ -447,17 +471,6 @@ class Backupy:
         filesize = os.path.getsize(filepath)
         printLog("Done [%s]" % sizeof_fmt(filesize))
 
-    def getsub_dir_path(self, root, entry):
-        ### dirpart = (root dir path) - (entry path) + (entry path's last (dir) element)
-        # root = /local/scratch/ebalife/test/source/elso/tizenegy
-        # entry = /local/scratch/ebalife/test/source/
-        # return "elso/tizenegy"
-
-        # use strip_dash_string_end(mydir)
-        # pathstr = line.split("/")[:-1]
-        # return '/' + os.path.join(*pathstr)
-        pass
-
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
         # TODO: adding multiple directories
@@ -492,7 +505,7 @@ class Backupy:
             for entry in bckentry['include_dirs']:
                 for root, dirs, files in os.walk(top=entry, followlinks=True):
                     for filename in files:
-                        dirpart = self.getsub_dir_path(root, entry)    # TODO
+                        dirpart = getsub_dir_path(root, entry)
                         if self.filter_zip(os.path.join(root, filename), bckentry):    # TODO
                             if bckentry['withpath'] == 'yes':
                                 archive.write(filename=os.path.join(root, filename), compress_type=zcompression)
