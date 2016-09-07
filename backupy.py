@@ -351,6 +351,24 @@ class Backupy:
             printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!")
             sys.exit(0)
 
+    @staticmethod
+    def check_mandatory_options(bckentry):
+        mandatory = ['name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dirs']
+        for ops in mandatory:
+            if isinstance(bckentry[ops], list):
+                if len(bckentry[ops]) != 1:
+                    continue
+                if bckentry[ops][0].strip() == "":
+                    printError("Empty '%s' option" % ops)
+                    sys.exit(1)
+            elif isinstance(bckentry[ops], str):
+                if bckentry[ops].strip() == "":
+                    printError("Empty '%s' option" % ops)
+                    sys.exit(1)
+            else:
+                printError("BUG! This can not happen! def check_mandatory_options()")
+                sys.exit(1)
+
     def filter_tar(self, tarinfo):
         """ filter function for tar creation - general and custom """
         # It works, only PEP8 shows warnings
@@ -473,27 +491,7 @@ class Backupy:
 
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
-        # TODO: adding multiple directories
-        # TODO: withpath == true/false
-        # TODO: filtering dirs, files!
         # TODO: need to add description?
-        # https://docs.python.org/3/library/zipfile.html
-        # https://uncorkedstudios.com/blog/zipping-multiple-folders-with-python
-        # http://stackoverflow.com/a/10597268/4325232
-        # http://stackoverflow.com/a/14569017
-        # http://stackoverflow.com/a/459419/4325232
-
-        # file = os.path.join(os.getcwd(), os.listdir(os.getcwd())[0])
-        # file
-        # os.path.dirname(file)  ## directory of file
-        # os.path.dirname(os.path.dirname(file))  ## directory of directory of file
-
-        # dir = os.path.dirname(os.path.dirname(file))  ## dir of dir of file
-        # ## once you're at the directory level you want, with the desired directory as the final path node:
-        # dirname1 = os.path.basename(dir)
-        # dirname2 = os.path.split(dir)[
-        #     1]  ## if you look at the documentation, this is exactly what os.path.basename does.
-
 
         # TODO: Exclude def: only with full path in .cfg file!!
 
@@ -548,16 +546,17 @@ class Backupy:
             sys.exit(1)
 
     def execute_backups(self):
-        for cfname, cfentry in self.configs_user.items():
+        for cfname, bckentry in self.configs_user.items():
             self.cfg_actual = cfname
-            mode = cfentry['method']
+            mode = bckentry['method']
 
-            if self.compress_pre(cfentry['result_dir'], cfentry):
+            self.check_mandatory_options(bckentry)
+            if self.compress_pre(bckentry['result_dir'], bckentry):
                 print("%s Starting backup" % get_time())
                 if mode == "tar" or mode == "targz":
-                    self.compress_tar(cfentry)
+                    self.compress_tar(bckentry)
                 elif mode == "zip":
-                    self.compress_zip(cfentry)
+                    self.compress_zip(bckentry)
                 else:
                     printLog("Wrong method type. Exiting.")
                     sys.exit(1)

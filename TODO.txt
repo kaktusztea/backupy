@@ -1,11 +1,6 @@
-### FIXED
-* compress_zip() works, except exclude_dir_fullpathes; fixed filter_tar():'exclude_dir_names' works with full path
-
-
 ### FIX
 * 'exclude_dir_names': also excludes if matches in full path anywhere
 * exclude_dir_fullpathes does not work yet (cut trailing "/"!)
-* compress_zip()
 * create_config_file(): store config lines in a fix order
 
 
@@ -24,14 +19,37 @@
 * filter include duplicates at bottom dir level
 * print out the actually used config file name at start
    * "mybackup.cfg is valid" / "... is invalid"
-* reserve and move n previous backups
+
 
 ### FEATURE 
+* reserve and move n previous backups
 * comment file addition to archive
-* ilelist file creation from archive - after compression
+* filelist file creation from archive - after compression
+* calculate estimated file size with free space
 
 ### TEST
 * write testcases
 
 
-Fixed: substring exclude problem
+
+---------------
+os.path, zipfile
+        # https://docs.python.org/3/library/zipfile.html
+        # https://uncorkedstudios.com/blog/zipping-multiple-folders-with-python
+        # http://stackoverflow.com/a/10597268/4325232
+        # http://stackoverflow.com/a/14569017
+        # http://stackoverflow.com/a/459419/4325232
+
+        # file = os.path.join(os.getcwd(), os.listdir(os.getcwd())[0])
+        # file
+        # os.path.dirname(file)  ## directory of file
+        # os.path.dirname(os.path.dirname(file))  ## directory of directory of file
+
+        # dir = os.path.dirname(os.path.dirname(file))  ## dir of dir of file
+        # ## once you're at the directory level you want, with the desired directory as the final path node:
+        # dirname1 = os.path.basename(dir)
+        # dirname2 = os.path.split(dir)[
+        #     1]  ## if you look at the documentation, this is exactly what os.path.basename does.
+
+
+----------------
