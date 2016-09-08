@@ -1,11 +1,11 @@
 ### FIX
 * 'exclude_dir_names': also excludes if matches in full path anywhere
+  -> exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
 * exclude_dir_fullpathes does not work yet (cut trailing "/"!)
 * create_config_file(): store config lines in a fix order
 
 
 ### TODO
-* handle empty option values (name= )
 * read, validate 'exclude_dir_fullpathes'
 * compress_zip()
   * Implement "follow symlinks" feature
@@ -26,6 +26,7 @@
 * comment file addition to archive
 * filelist file creation from archive - after compression
 * calculate estimated file size with free space
+  http://stackoverflow.com/questions/12480367/how-to-generate-directory-size-recursively-in-python-like-du-does
 
 ### TEST
 * write testcases
