@@ -115,107 +115,6 @@ def create_config_file(config_file_path):
         filehandler.close()
 
 
-def get_configs_userbackup(config_file):
-    if not os.path.exists(config_file):
-        printError("Config file does not exists: %s" % config_file)
-        sys.exit(1)
-
-    allconfigs = {}
-    cfghandler = configparser.ConfigParser()
-    try:
-        cfghandler.read(config_file)
-        section_list = cfghandler.sections()
-        pattern = re.compile("BACKUP[0-9]{1,2}$")
-        for section in section_list:
-            if pattern.match(section):
-                bconfig = {}
-                bconfig['enabled'] = cfghandler.get(section, 'enabled', raw=False)
-                bconfig['name'] = cfghandler.get(section, 'name', raw=False)
-                bconfig['archive_name'] = cfghandler.get(section, 'archive_name', raw=False)
-
-                bconfig['result_dir'] = cfghandler.get(section, 'result_dir', raw=False)
-                bconfig['method'] = cfghandler.get(section, 'method', raw=False)
-                bconfig['followsym'] = cfghandler.get(section, 'followsym', raw=False)
-                bconfig['withpath'] = cfghandler.get(section, 'withpath', raw=False)
-
-                ll = cfghandler.get(section, 'include_dirs', raw=False)
-                bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
-                bconfig['include_dirs'] = strip_enddash_on_list(bconfig['include_dirs'])
-
-                ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
-                bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
-
-                ll = cfghandler.get(section, 'exclude_dir_fullpathes', raw=False)
-                bconfig['exclude_dir_fullpathes'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_dir_fullpathes'] = strip_enddash_on_list(bconfig['exclude_dir_fullpathes'])
-
-                ll = cfghandler.get(section, 'exclude_endings', raw=False)
-                bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-                bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
-
-                ll = cfghandler.get(section, 'exclude_files', raw=False)
-                bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
-
-                bconfig = strip_hash_on_dict_values(bconfig)
-                if check_string_contains_spaces(bconfig['archive_name']):
-                    printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
-                    printError("Exiting")
-                    sys.exit(1)
-
-                bconfig['archivefullpath'] = 'replace_this'
-                if bconfig['method'] == 'tar':
-                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar'
-                elif bconfig['method'] == 'targz':
-                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
-                elif bconfig['method'] == 'zip':
-                    bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.zip'
-                else:
-                    printError("Error: wrong compression method declared in section %s" % section)
-                    printError("Valid: method = { tar ; targz ; zip}")
-                    printError("Exiting")
-                    sys.exit(1)
-                allconfigs[section] = bconfig
-
-    except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
-        printError("Invalid config file: %s" % config_file)
-        printError("%s" % err.message)
-        sys.exit(1)
-    else:
-        return allconfigs
-
-
-def get_configs_global(config_file):
-    bconfig = {}
-    cfghandler = configparser.ConfigParser()
-    try:
-        cfghandler.read(config_file)
-        bconfig['sections'] = cfghandler.sections()
-
-        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
-        bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
-
-        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
-        bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
-
-        ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dir_names', raw=False)
-        bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
-        bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
-
-        bconfig = strip_hash_on_dict_values(bconfig)
-    except configparser.Error as err:
-        printError("Config file syntax error: %s" % config_file)
-        printError("%s" % err.message)
-        sys.exit(1)
-    except OSError as oerr:
-        printError("OSError: %s" % config_file)
-        printError("%s (%s)" % (oerr.strerror, str(oerr.errno)))
-        sys.exit(1)
-    else:
-        return bconfig
-
-
 def check_python_version():
     try:
         assert sys.version_info >= (3, 4)
@@ -330,6 +229,107 @@ class Backupy:
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
               "Note: use of comment sign '#' is allowed - at the end of option lines\n")
 
+    @staticmethod
+    def get_configs_global(config_file):
+        bconfig = {}
+        cfghandler = configparser.ConfigParser()
+        try:
+            cfghandler.read(config_file)
+            bconfig['sections'] = cfghandler.sections()
+
+            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
+            bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
+            bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
+
+            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
+            bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+
+            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dir_names', raw=False)
+            bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
+            bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
+
+            bconfig = strip_hash_on_dict_values(bconfig)
+        except configparser.Error as err:
+            printError("Config file syntax error: %s" % config_file)
+            printError("%s" % err.message)
+            sys.exit(1)
+        except OSError as oerr:
+            printError("OSError: %s" % config_file)
+            printError("%s (%s)" % (oerr.strerror, str(oerr.errno)))
+            sys.exit(1)
+        else:
+            return bconfig
+
+    def get_configs_userbackup(self, config_file):
+        if not os.path.exists(config_file):
+            printError("Config file does not exists: %s" % config_file)
+            sys.exit(1)
+
+        allconfigs = {}
+        cfghandler = configparser.ConfigParser()
+        try:
+            cfghandler.read(config_file)
+            section_list = cfghandler.sections()
+            pattern = re.compile("BACKUP[0-9]{1,2}$")
+            for section in section_list:
+                if pattern.match(section):
+                    bconfig = {}
+                    bconfig['section'] = section
+                    bconfig['enabled'] = cfghandler.get(section, 'enabled', raw=False)
+                    bconfig['name'] = cfghandler.get(section, 'name', raw=False)
+                    bconfig['archive_name'] = cfghandler.get(section, 'archive_name', raw=False)
+
+                    bconfig['result_dir'] = cfghandler.get(section, 'result_dir', raw=False)
+                    bconfig['method'] = cfghandler.get(section, 'method', raw=False)
+                    bconfig['followsym'] = cfghandler.get(section, 'followsym', raw=False)
+                    bconfig['withpath'] = cfghandler.get(section, 'withpath', raw=False)
+
+                    ll = cfghandler.get(section, 'include_dirs', raw=False)
+                    bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
+                    bconfig['include_dirs'] = strip_enddash_on_list(bconfig['include_dirs'])
+
+                    ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
+                    bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
+                    bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
+
+                    ll = cfghandler.get(section, 'exclude_dir_fullpathes', raw=False)
+                    bconfig['exclude_dir_fullpathes'] = list(map(str.strip, ll.split(',')))
+                    bconfig['exclude_dir_fullpathes'] = strip_enddash_on_list(bconfig['exclude_dir_fullpathes'])
+
+                    ll = cfghandler.get(section, 'exclude_endings', raw=False)
+                    bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
+                    bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
+
+                    ll = cfghandler.get(section, 'exclude_files', raw=False)
+                    bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
+
+                    bconfig = strip_hash_on_dict_values(bconfig)
+                    if check_string_contains_spaces(bconfig['archive_name']):
+                        printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
+                        printError("Exiting")
+                        sys.exit(1)
+
+                    bconfig['archivefullpath'] = 'replace_this'
+                    if bconfig['method'] == 'tar':
+                        bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar'
+                    elif bconfig['method'] == 'targz':
+                        bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
+                    elif bconfig['method'] == 'zip':
+                        bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.zip'
+                    else:
+                        printError("Error: wrong compression method declared in section %s" % section)
+                        printError("Valid: method = { tar ; targz ; zip}")
+                        printError("Exiting")
+                        sys.exit(1)
+                    self.check_mandatory_options(bconfig)
+                    allconfigs[section] = bconfig
+        except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
+            printError("Invalid config file: %s" % config_file)
+            printError("%s" % err.message)
+            sys.exit(1)
+        else:
+            return allconfigs
+
     def check_first_run(self):
         if not os.path.exists(self.home_path):
             printError("Can not access home directory: %s" % self.home_path)
@@ -351,22 +351,24 @@ class Backupy:
             printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!")
             sys.exit(0)
 
-    @staticmethod
-    def check_mandatory_options(bckentry):
+    def check_mandatory_options(self, bckentry):
         mandatory = ['name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dirs']
+        err = False
         for ops in mandatory:
             if isinstance(bckentry[ops], list):
                 if len(bckentry[ops]) != 1:
                     continue
                 if bckentry[ops][0].strip() == "":
-                    printError("Empty '%s' option" % ops)
-                    sys.exit(1)
+                    err = True
             elif isinstance(bckentry[ops], str):
                 if bckentry[ops].strip() == "":
-                    printError("Empty '%s' option" % ops)
-                    sys.exit(1)
+                    err = True
             else:
                 printError("BUG! This can not happen! def check_mandatory_options()")
+                sys.exit(1)
+            if err:
+                printError("Invalid config file: %s" % self.path_config_file)
+                printError("[%s]: '%s' option is mandatory!" % (bckentry['section'], ops))
                 sys.exit(1)
 
     def filter_tar(self, tarinfo):
@@ -416,8 +418,7 @@ class Backupy:
         else:
             return True
 
-    @staticmethod
-    def compress_pre(path_target_dir, bckentry):
+    def compress_pre(self, path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
@@ -432,9 +433,15 @@ class Backupy:
             printError("There is already an archive with this name: %s" % filepath)
             printError("Skipping")
             return False
+
         else:
             printLog("--------------------------------------------------")
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
+            if not os.path.isdir(path_target_dir):
+                printError("Config file: %s" % self.path_config_file)
+                printError("Section: [%s]" % bckentry['section'])
+                printError("Target directory does not exists: %s" % path_target_dir)
+                sys.exit(1)
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
             printLog("Free space in target dir: %s" % get_dir_free_space(path_target_dir))
@@ -536,8 +543,8 @@ class Backupy:
         self.check_first_run()
 
         # Create user backup config file list
-        self.configs_global = get_configs_global(self.path_config_file)
-        self.configs_user = get_configs_userbackup(self.path_config_file)
+        self.configs_global = self.get_configs_global(self.path_config_file)
+        self.configs_user = self.get_configs_userbackup(self.path_config_file)
 
         if self.configs_user is False:
             printLog("---------------------------------------------------------------")
@@ -550,7 +557,7 @@ class Backupy:
             self.cfg_actual = cfname
             mode = bckentry['method']
 
-            self.check_mandatory_options(bckentry)
+            # self.check_mandatory_options(bckentry)
             if self.compress_pre(bckentry['result_dir'], bckentry):
                 print("%s Starting backup" % get_time())
                 if mode == "tar" or mode == "targz":
