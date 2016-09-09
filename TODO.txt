@@ -1,25 +1,26 @@
-### FIX
-* 'exclude_dir_names': also excludes if matches in full path anywhere
-  -> exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
-* exclude_dir_fullpathes does not work yet (cut trailing "/"!)
+### EXCLUSION
+* 'exclude_dir_names'
+  * also excludes if matches in full path anywhere
+    -> exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
+  * # comment does not work??
+* exclude_dir_fullpathes
+  *  does not work yet (cut trailing "/"!)
+
+* filter include duplicates at bottom dir level
+
 * create_config_file(): store config lines in a fix order
 
 
 ### TODO
+* BUG 543: None as return code is passing! BUG! (zip exclusion)
+* overwrite = yes/no
 * read, validate 'exclude_dir_fullpathes'
 * compress_zip()
   * Implement "follow symlinks" feature
-* filter_zip()
-  * Implement exclude_dir_names
-  * Implement exclude_dir_fullpath
-* filter_tar():
-  * Implement exclude_dir_names
-  * Implement exclude_dir_fullpath
 
-* filter include duplicates at bottom dir level
 * print out the actually used config file name at start
    * "mybackup.cfg is valid" / "... is invalid"
-
+* exclude_ending: handle ~  (this is a unique case. I.e: test.jpg~)
 
 ### FEATURE 
 * reserve and move n previous backups

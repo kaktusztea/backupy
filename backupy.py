@@ -21,6 +21,8 @@ __version__ = '0.8'
 
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
+coloryellow = '\033[0;33m'
+debug = True
 sep = os.path.sep
 
 
@@ -67,7 +69,7 @@ def check_string_contains_spaces(line):
 
 def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
-        if not elem.startswith("."):
+        if not elem.startswith(".") and elem != "~":
             endinglist[idx] = "." + elem
     return endinglist
 
@@ -158,6 +160,11 @@ def printError(log):
     printLog(colorred + log + colorreset)
 
 
+def printDebug(log):
+    if debug:
+        printLog(coloryellow + log + colorreset)
+
+
 def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -227,7 +234,8 @@ class Backupy:
               "   exclude_dir_fullpathes = /home/joe/humour/saskabare, /home/joe/novels/bad_ones  # list of excluded directories with full path\n"
               "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
-              "Note: use of comment sign '#' is allowed - at the end of option lines\n")
+              "Tip 1: use of comment sign '#' is allowed - at the end of option lines\n\n"
+              "Tip 2: exclude_endings' special case: '~' -> it excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n")
 
     @staticmethod
     def get_configs_global(config_file):
@@ -372,52 +380,71 @@ class Backupy:
                 printError("[%s]: '%s' option is mandatory!" % (bckentry['section'], ops))
                 sys.exit(1)
 
-    def filter_tar(self, tarinfo):
+    def filter_general(self, item):
+        mode = ""
+        filenamefull = ""
+        if isinstance(item, str):
+            filenamefull = item
+            mode = "zip"
+        elif isinstance(item, tarfile.TarInfo):
+            filenamefull = item.name
+            mode = "tar"
+
+    # def filter_tar(self, tarinfo):
         """ filter function for tar creation - general and custom """
         # It works, only PEP8 shows warnings
         # http://stackoverflow.com/questions/23962434/pycharm-expected-type-integral-got-str-instead
-        if tarinfo.name.endswith(tuple(self.configs_global['exclude_endings'])):
-            return None
-        elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
-            return None
-
-        #  It works, only Pycharm-PEP8 shows warnings
-        elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_files']:
-            return None
-        elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
-            return None
-
-        #  It works, only Pycharm-PEP8 shows warnings
-        if any(dirname in tarinfo.name.split("/") for dirname in self.configs_global['exclude_dir_names']):
-            return None
-        if any(dirname in tarinfo.name.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
-            return None
-
-        else:
-            return tarinfo
-
-    def filter_zip(self, filenamefull, bckentry):
+    #     if tarinfo.name.endswith(tuple(self.configs_global['exclude_endings'])):
+    #         return None
+    #     elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
+    #         return None
+    #
+    #     #  It works, only Pycharm-PEP8 shows warnings
+    #     elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_files']:
+    #         return None
+    #     elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
+    #         return None
+    #
+    #     #  It works, only Pycharm-PEP8 shows warnings
+    #     if any(dirname in tarinfo.name.split("/") for dirname in self.configs_global['exclude_dir_names']):
+    #         return None
+    #     if any(dirname in tarinfo.name.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
+    #         return None
+    #
+    #     else:
+    #         return tarinfo
+    #
+    # def filter_zip(self, filenamefull, bckentry):
         # fn = os.path.join(base, file)
         # zfile.write(fn, fn[rootlen:])
         if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
-            return False
+            printDebug("Global exclude ending: %s" % filenamefull)  # DEBUG
+            return None
         elif filenamefull.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
-            return False
+            printDebug("User exclude ending: %s" % filenamefull)  # DEBUG
+            return None
 
         #  It works, only Pycharm-PEP8 shows warnings
         elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
-            return False
+            printDebug("Global exclude file: %s" % filenamefull)  # DEBUG
+            return None
         elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_files']:
-            return False
+            printDebug("User exclude file: %s" % filenamefull)  # DEBUG
+            return None
 
         #  It works, only Pycharm-PEP8 shows warnings
+        # TODO:only after the basedir!!
         if any(dirname in filenamefull.split("/") for dirname in self.configs_global['exclude_dir_names']):
+            printDebug("Global exclude dir names matched at: %s" % filenamefull)  # DEBUG
             return None
         if any(dirname in filenamefull.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
-            print("User exclude dir matched at: %s" % filenamefull)    # DEBUG
+            printDebug("User exclude dir names matched at: %s" % filenamefull)    # DEBUG
             return None
         else:
-            return True
+            if mode == "zip":
+                return True
+            if mode == "tar":
+                return item
 
     def compress_pre(self, path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
@@ -471,10 +498,10 @@ class Backupy:
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dirs']:
-                    archive.add(entry, filter=self.filter_tar)
+                    archive.add(entry, filter=self.filter_general())
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dirs']:
-                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_tar)
+                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                 sys.exit(1)
@@ -513,7 +540,7 @@ class Backupy:
                 for root, dirs, files in os.walk(top=entry, followlinks=True):
                     for filename in files:
                         dirpart = getsub_dir_path(root, entry)
-                        if self.filter_zip(os.path.join(root, filename), bckentry):    # TODO
+                        if self.filter_general(os.path.join(root, filename)):    # TODO: None as return code is passing! BUG!
                             if bckentry['withpath'] == 'yes':
                                 archive.write(filename=os.path.join(root, filename), compress_type=zcompression)
                             elif bckentry['withpath'] == 'no':
