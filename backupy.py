@@ -158,12 +158,6 @@ def printError(log):
     printLog(colorred + log + colorreset)
 
 
-def print_config_error(path_config_file, section, path_target_dir):
-    printError("Config file: %s" % path_config_file)
-    printError("Section: [%s]" % section)
-    printError("Target directory does not exists: %s" % path_target_dir)
-    sys.exit(1)
-
 def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -446,11 +440,10 @@ class Backupy:
             printLog("--------------------------------------------------")
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             if not os.path.isdir(path_target_dir):
-                print_config_error(self.path_config_file, bckentry['section'], path_target_dir)
-                # printError("Config file: %s" % self.path_config_file)
-                # printError("Section: [%s]" % bckentry['section'])
-                # printError("Target directory does not exists: %s" % path_target_dir)
-                # sys.exit(1)
+                printError("Config file: %s" % self.path_config_file)
+                printError("Section: [%s]" % bckentry['section'])
+                printError("Target directory does not exists: %s" % path_target_dir)
+                sys.exit(1)
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
             printLog("Free space in target dir: %s" % get_dir_free_space(path_target_dir))
