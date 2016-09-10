@@ -67,6 +67,13 @@ def check_string_contains_spaces(line):
         return False
 
 
+def check_string_contains_comma(line):
+    if "," in line:
+        return True
+    else:
+        return False
+
+
 def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith(".") and elem != "~":
@@ -101,9 +108,10 @@ def create_config_file(config_file_path):
                                        'method': 'targz',
                                        'followsym': 'yes',
                                        'withpath': 'no',
-                                       'include_dirs': '/home/joe/humour, /home/joe/novels',
+                                       'include_dir1': '/home/joe/humour                # at least one is mandatory',
+                                       'include_dir2': '/home/joe/novels',
                                        'exclude_dir_names': 'garbage, temp',
-                                       'exclude_dir_fullpathes': '/home/joe/humour/saskabare, /home/joe/novels/bad_ones',
+                                       'exclude_dir_fullpath': '/home/joe/humour/saskabare, /home/joe/novels/bad_ones',
                                        'exclude_endings': '~, gif, jpg, bak',
                                        'exclude_files': 'abc.log, swp.db'}
     try:
@@ -216,26 +224,34 @@ class Backupy:
               "                                     # if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
               "   ./backupy.py /foo/mybackup.cfg    # starts with custom backup set config file\n"
               "   ./backupy.py --help               # this help\n\n"
-              "Example for config file:\n"
+              "Example for config file\n"
               "   [GLOBAL_EXCLUDES]                    # you can change options' values, but don't modify section name and option names!\n"
               "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
               "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
-              "   exclude_dir_names = trash, garbage   # list of excluded directory names without path\n\n"
+              "   exclude_dir_names = trash, garbage   # list of globally excluded directory names without path\n\n"
               "   [BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
-              "   name = My Document backup            # write entry name here\n"
-              "   enabled = yes                        # is this backup active. {yes, no}\n"
-              "   archive_name = document_backup       # archive file name without extension\n"
-              "   result_dir = /home/joe/mybackups     # Where to create the archive file\n"
-              "   method = targz                       # Compression method {tar, targz, zip}\n"
-              "   followsym = yes                      # Should compressor follow symlinks\n"
-              "   withpath = no                        # compress files with or without full path\n"
-              "   include_dirs = /home/joe/humour, /home/joe/novels   # list of included directories\n"
+              "  *name = My Document backup            # write entry name here\n"
+              "  *enabled = yes                        # is this backup active. {yes, no}\n"
+              "  *archive_name = document_backup       # archive file name without extension\n"
+              "  *result_dir = /home/joe/mybackups     # Where to create the archive file\n"
+              "  *method = targz                       # Compression method {tar, targz, zip}\n"
+              "  *followsym = yes                      # Should compressor follow symlinks\n"
+              "  *withpath = no                        # compress files with or without full path\n"
+              "  *include_dir1 = /home/joe/humour      # included directory 1. (at least one is mandatory)\n"
+              "   include_dir2 = /home/joe/novels      # included directory 2.\n"
+              "   inlcude_dirN = ... \n"
+              "   ... \n"
               "   exclude_dir_names = garbage, temp    # list of excluded directory names without path\n"
-              "   exclude_dir_fullpathes = /home/joe/humour/saskabare, /home/joe/novels/bad_ones  # list of excluded directories with full path\n"
+              "   exclude_dir_fullpath1 = /home/joe/humour/saskabare   # exclude directory 1. Not mandatory.\n"
+              "   exclude_dir_fullpath2 = /home/joe/novels/bad_ones\n"
+              "   exclude_dir_fullpathN = ...\n"
+              "   ...\n"
               "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
-              "Tip 1: use of comment sign '#' is allowed - at the end of option lines\n\n"
-              "Tip 2: exclude_endings' special case: '~' -> it excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n")
+              "   * Mandatory options\n\n"
+              "Tip 1: use of comment sign '#' is allowed - at the end of option lines\n"
+              "Tip 2: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
+              "Tip 3: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
 
     @staticmethod
     def get_configs_global(config_file):
@@ -292,17 +308,26 @@ class Backupy:
                     bconfig['followsym'] = cfghandler.get(section, 'followsym', raw=False)
                     bconfig['withpath'] = cfghandler.get(section, 'withpath', raw=False)
 
-                    ll = cfghandler.get(section, 'include_dirs', raw=False)
-                    bconfig['include_dirs'] = list(map(str.strip, ll.split(',')))
-                    bconfig['include_dirs'] = strip_enddash_on_list(bconfig['include_dirs'])
+                    i = 1
+                    bconfig['include_dir'] = []
+                    while 'include_dir'+str(i) in cfghandler[section]:
+                        ll = cfghandler.get(section, 'include_dir'+str(i), raw=False)
+                        if len(ll) > 0:
+                            bconfig['include_dir'].append(ll)
+                        i += 1
+                    bconfig['include_dir'] = strip_enddash_on_list(bconfig['include_dir'])
+
+                    i = 1
+                    bconfig['exclude_dir_fullpath'] = []
+                    while 'exclude_dir_fullpath'+str(i) in cfghandler[section]:
+                        ll = cfghandler.get(section, 'exclude_dir_fullpath'+str(i), raw=False)
+                        if len(ll) > 0:
+                            bconfig['exclude_dir_fullpath'].append(ll)
+                        i += 1
 
                     ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
                     bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
                     bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
-
-                    ll = cfghandler.get(section, 'exclude_dir_fullpathes', raw=False)
-                    bconfig['exclude_dir_fullpathes'] = list(map(str.strip, ll.split(',')))
-                    bconfig['exclude_dir_fullpathes'] = strip_enddash_on_list(bconfig['exclude_dir_fullpathes'])
 
                     ll = cfghandler.get(section, 'exclude_endings', raw=False)
                     bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
@@ -314,8 +339,20 @@ class Backupy:
                     bconfig = strip_hash_on_dict_values(bconfig)
                     if check_string_contains_spaces(bconfig['archive_name']):
                         printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
-                        printError("Exiting")
                         sys.exit(1)
+                    for n, inclpath in enumerate(bconfig['include_dir']):
+                        if check_string_contains_spaces(inclpath) or check_string_contains_comma(inclpath):
+                            printError("%s" % config_file)
+                            printError("[%s]" % section)
+                            printError("Space, comma in 'include_dir%s' is not allowed" % str(n+1))
+                            sys.exit(1)
+                    for n, exclpath in enumerate(bconfig['exclude_dir_fullpath']):
+                        if check_string_contains_spaces(exclpath) or check_string_contains_comma(exclpath):
+                            printError("%s" % config_file)
+                            printError("[%s]" % section)
+                            printError("Space, comma in 'eclude_dir%s' is not allowed" % str(n+1))
+                            printError("Exiting")
+                            sys.exit(1)
 
                     bconfig['archivefullpath'] = 'replace_this'
                     if bconfig['method'] == 'tar':
@@ -360,13 +397,15 @@ class Backupy:
             sys.exit(0)
 
     def check_mandatory_options(self, bckentry):
-        mandatory = ['name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dirs']
+        mandatory = ['name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dir']
         err = False
         for ops in mandatory:
             if isinstance(bckentry[ops], list):
-                if len(bckentry[ops]) != 1:
+                if len(bckentry[ops]) > 1:
                     continue
-                if bckentry[ops][0].strip() == "":
+                if len(bckentry[ops]) == 0:
+                    err = True
+                elif bckentry[ops][0].strip() == "":
                     err = True
             elif isinstance(bckentry[ops], str):
                 if bckentry[ops].strip() == "":
@@ -382,69 +421,56 @@ class Backupy:
 
     def filter_general(self, item):
         mode = ""
+        retval = ""
         filenamefull = ""
         if isinstance(item, str):
             filenamefull = item
             mode = "zip"
+            retval = False
         elif isinstance(item, tarfile.TarInfo):
             filenamefull = item.name
             mode = "tar"
+            retval = None
 
-    # def filter_tar(self, tarinfo):
-        """ filter function for tar creation - general and custom """
-        # It works, only PEP8 shows warnings
-        # http://stackoverflow.com/questions/23962434/pycharm-expected-type-integral-got-str-instead
-    #     if tarinfo.name.endswith(tuple(self.configs_global['exclude_endings'])):
-    #         return None
-    #     elif tarinfo.name.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
-    #         return None
-    #
-    #     #  It works, only Pycharm-PEP8 shows warnings
-    #     elif get_leaf_from_path(tarinfo.name) in self.configs_global['exclude_files']:
-    #         return None
-    #     elif get_leaf_from_path(tarinfo.name) in self.configs_user[self.cfg_actual]['exclude_files']:
-    #         return None
-    #
-    #     #  It works, only Pycharm-PEP8 shows warnings
-    #     if any(dirname in tarinfo.name.split("/") for dirname in self.configs_global['exclude_dir_names']):
-    #         return None
-    #     if any(dirname in tarinfo.name.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
-    #         return None
-    #
-    #     else:
-    #         return tarinfo
-    #
-    # def filter_zip(self, filenamefull, bckentry):
-        # fn = os.path.join(base, file)
-        # zfile.write(fn, fn[rootlen:])
+        # exclude_endings; only Pycharm-PEP8 warning
         if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
             printDebug("Global exclude ending: %s" % filenamefull)  # DEBUG
-            return None
+            return retval
         elif filenamefull.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             printDebug("User exclude ending: %s" % filenamefull)  # DEBUG
-            return None
+            return retval
 
-        #  It works, only Pycharm-PEP8 shows warnings
+        #  exclude_file; only Pycharm-PEP8 warning
         elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
             printDebug("Global exclude file: %s" % filenamefull)  # DEBUG
-            return None
+            return retval
         elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_files']:
             printDebug("User exclude file: %s" % filenamefull)  # DEBUG
-            return None
+            return retval
 
-        #  It works, only Pycharm-PEP8 shows warnings
+        # exclude_dir_names; only Pycharm-PEP8 warning
         # TODO:only after the basedir!!
+        # ll = getsub_dir_path(os.path.basename(filenamefull))    # TODO: get root dir!
         if any(dirname in filenamefull.split("/") for dirname in self.configs_global['exclude_dir_names']):
             printDebug("Global exclude dir names matched at: %s" % filenamefull)  # DEBUG
-            return None
+            return retval
         if any(dirname in filenamefull.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
             printDebug("User exclude dir names matched at: %s" % filenamefull)    # DEBUG
-            return None
+            return retval
+
+        # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
+        if any(dirname == os.path.basename(filenamefull) for dirname in self.configs_user[self.cfg_actual]['exclude_dir_fullpath']):
+            printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)    # DEBUG
+            return retval
+
+        # No filtering occured, file can be passed to compressor
+        if mode == "zip":
+            return True
+        elif mode == "tar":
+            return item
         else:
-            if mode == "zip":
-                return True
-            if mode == "tar":
-                return item
+            printError("filter_general(): Impossible return value.\n")
+            raise Exception("filter_general(): Impossible return value.")
 
     def compress_pre(self, path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
@@ -469,7 +495,7 @@ class Backupy:
             if not os.path.isdir(path_target_dir):
                 printError("Config file: %s" % self.path_config_file)
                 printError("Section: [%s]" % bckentry['section'])
-                printError("Target directory does not exists: %s" % path_target_dir)
+                printError("Result directory does not exists: %s" % path_target_dir)
                 sys.exit(1)
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
@@ -497,10 +523,10 @@ class Backupy:
             archive = tarfile.open(name=filepath, mode=mode, dereference=dereference)
 
             if bckentry['withpath'] == 'yes':
-                for entry in bckentry['include_dirs']:
+                for entry in bckentry['include_dir']:
                     archive.add(entry, filter=self.filter_general())
             elif bckentry['withpath'] == 'no':
-                for entry in bckentry['include_dirs']:
+                for entry in bckentry['include_dir']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
             else:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
@@ -536,7 +562,7 @@ class Backupy:
         try:
             archive = zipfile.ZipFile(file=filepath, mode="w", compression=zcompression)
             # archive.comment = bckentry['description']
-            for entry in bckentry['include_dirs']:
+            for entry in bckentry['include_dir']:
                 for root, dirs, files in os.walk(top=entry, followlinks=True):
                     for filename in files:
                         dirpart = getsub_dir_path(root, entry)
@@ -586,7 +612,6 @@ class Backupy:
             self.cfg_actual = cfname
             mode = bckentry['method']
 
-            # self.check_mandatory_options(bckentry)
             if self.compress_pre(bckentry['result_dir'], bckentry):
                 print("%s Starting backup" % get_time())
                 if mode == "tar" or mode == "targz":
