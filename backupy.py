@@ -21,7 +21,8 @@ __version__ = '0.8'
 
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
-coloryellow = '\033[0;33m'
+# coloryellow = '\033[0;33m'
+coloryellow = '\033[0;93m'
 debug = True
 sep = os.path.sep
 
@@ -164,6 +165,14 @@ def printLog(log):
     print(pp)
 
 
+def printWarning(log):
+    if isinstance(log, str):
+        printLog(coloryellow + log + colorreset)
+    if isinstance(log, list):
+        for line in log:
+            printLog(coloryellow + line + colorreset)
+
+
 def printError(log):
     printLog(colorred + log + colorreset)
 
@@ -173,11 +182,26 @@ def printDebug(log):
         printLog(coloryellow + log + colorreset)
 
 
-def exit_with_config_error(config_file, section, comment):
+def exit_config_error(config_file, section, comment, exitnow=True):
     printError("%s" % config_file)
     printError("[%s]" % section)
-    printError(comment)
-    sys.exit(1)
+    if isinstance(comment, str):
+        printError(comment)
+    if isinstance(comment, list):
+        for line in comment:
+            printError(line)
+    if exitnow:
+        sys.exit(1)
+
+
+def print_config_warning(config_file, section, comment):
+    printWarning("%s" % config_file)
+    printWarning("[%s]" % section)
+    if isinstance(comment, str):
+        printWarning(comment)
+    if isinstance(comment, list):
+        for line in comment:
+            printWarning(line)
 
 
 def sizeof_fmt(num, suffix='B'):
@@ -201,6 +225,7 @@ class Backupy:
         self.home_path = os.path.expanduser("~")
         self.path_default_configdir = self.home_path + '/.config/backupy'
         self.path_default_config_file = self.path_default_configdir + '/default.cfg'
+
         if len(sys.argv) == 2:
             if sys.argv[1] == "--help":
                 self.help()
@@ -221,10 +246,8 @@ class Backupy:
         self.configs_global = ""
         self.configs_user = {}
         self.cfg_actual = ''
-        # self.oserrorcodes = [(k, v, os.strerror(k)) for k, v in os.errno.errorcode.items()]
 
-    @staticmethod
-    def help():
+    def help(self):
         print("backupy v" + __version__ + "\n\n"
               "Start methods\n"
               "   ./backupy.py                      # at first run, generates default backup set config file\n"
@@ -259,6 +282,9 @@ class Backupy:
               "Tip 1: use of comment sign '#' is allowed - at the end of option lines\n"
               "Tip 2: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
               "Tip 3: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
+        if not os.path.exists(self.path_default_config_file):
+            printWarning("\nYou did not run backupy init yet.")
+            printWarning("Just run ./backupy.py and let it create default config for you.\n")
 
     @staticmethod
     def get_configs_global(config_file):
@@ -332,34 +358,42 @@ class Backupy:
                             bconfig['exclude_dir_fullpath'].append(ll)
                         i += 1
 
+                    # exclude_dir_names
                     ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
                     bconfig['exclude_dir_names'] = list(map(str.strip, ll.split(',')))
                     bconfig['exclude_dir_names'] = strip_enddash_on_list(bconfig['exclude_dir_names'])
 
+                    # exclude_endings
                     ll = cfghandler.get(section, 'exclude_endings', raw=False)
                     bconfig['exclude_endings'] = list(map(str.strip, ll.split(',')))
                     bconfig['exclude_endings'] = add_dot_for_endings(bconfig['exclude_endings'])
 
+                    # exclude_files
                     ll = cfghandler.get(section, 'exclude_files', raw=False)
                     bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
+                    # strip # (comment) at the line endings
                     bconfig = strip_hash_on_dict_values(bconfig)
 
+                    # archive_name
                     if check_string_contains_spaces(bconfig['archive_name']):
-                        printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
-                        sys.exit(1)
+                        comment = "Space in archive name is not allowed: %s" % bconfig['archive_name']
+                        exit_config_error(config_file, section, comment)
                     if bconfig['archive_name'].strip() == '':
-                        errmsg = "'archive_name' can not be empty."
-                        exit_with_config_error(config_file, section, errmsg)
+                        errmsg = "'archive_name' is mandatory."
+                        exit_config_error(config_file, section, errmsg)
 
+                    # include_dir
                     for n, inclpath in enumerate(bconfig['include_dir']):
                         if check_string_contains_spaces(inclpath) or check_string_contains_comma(inclpath):
                             errmsg = "Space, comma in 'include_dir"+str(n+1)+" is not allowed"
-                            exit_with_config_error(config_file, section, errmsg)
+                            exit_config_error(config_file, section, errmsg)
+
+                    # exclude_dir_fullpath
                     for n, exclpath in enumerate(bconfig['exclude_dir_fullpath']):
                         if check_string_contains_spaces(exclpath) or check_string_contains_comma(exclpath):
                             errmsg = "Space, comma in 'eclude_dir%s' is not allowed" % str(n+1)
-                            exit_with_config_error(config_file, section, errmsg)
+                            exit_config_error(config_file, section, errmsg)
 
                     bconfig['archivefullpath'] = 'replace_this'
 
@@ -370,12 +404,13 @@ class Backupy:
                     elif bconfig['method'] == 'zip':
                         bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.zip'
                     else:
-                        printError("Error: wrong compression method declared in section %s" % section)
-                        printError("Valid: method = { tar ; targz ; zip}")
-                        printError("Exiting")
-                        sys.exit(1)
+                        comment = ["Wrong compression method declared (%s)" % bconfig['method'],
+                                   "method = { tar ; targz ; zip}"]
+                        exit_config_error(config_file, section, comment)
+
                     self.check_mandatory_options(bconfig)
                     allconfigs[section] = bconfig
+
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % config_file)
             printError("%s" % err.message)
@@ -401,12 +436,14 @@ class Backupy:
             create_config_file(self.path_default_config_file)
             printLog("---------------------------------------------------------------")
             printLog("Now you can create user specified backup entries in %s" % self.path_default_config_file)
-            printLog("Also you can create custom user specified backup set config file(s) - called as command line parameter.")
-            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!")
+            printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
+            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!\n")
+            printWarning("backupy.py --help is your friend.\n")
             sys.exit(0)
 
     def check_mandatory_options(self, bckentry):
-        mandatory = ['name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dir']
+        mandatory = ['enabled', 'name', 'archive_name', 'method', 'followsym', 'result_dir', 'withpath', 'include_dir']
+        yes_no_ops = ['enabled', 'followsym', 'withpath']
         err = False
         for ops in mandatory:
             if isinstance(bckentry[ops], list):
@@ -423,10 +460,12 @@ class Backupy:
                 printError("BUG! This can not happen! def check_mandatory_options()")
                 sys.exit(1)
             if err:
-                # TODO: use print_config_error()
-                printError("Invalid config file: %s" % self.path_config_file)
-                printError("[%s]: '%s' option is mandatory!" % (bckentry['section'], ops))
-                sys.exit(1)
+                comment = "'%s' is mandatory!" % ops
+                exit_config_error(self.path_config_file, bckentry['section'], comment)
+        for opss in yes_no_ops:
+            if bckentry[opss] not in ['yes', 'no']:
+                comment = "'%s' = {yes, no}" % opss
+                exit_config_error(self.path_config_file, bckentry['section'], comment)
 
     def filter_general(self, item):
         mode = ""
@@ -486,26 +525,22 @@ class Backupy:
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
         bckentry['archivefullpath'] = filepath
 
+        printLog("--------------------------------------------------")
         if bckentry['enabled'].lower() != "yes":
-            printLog("--------------------------------------------------")
             printLog("Backup entry \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
             return False
         if os.path.isfile(filepath):
-            printLog("--------------------------------------------------")
             printLog("Executing backup '%s'" % bckentry['name'])
-            printError("There is already an archive with this name: %s" % filepath)
-            printError("Skipping")
-
+            printWarning("There is already an archive with this name:")
+            printWarning("%s" % filepath)
+            printWarning("Skipping")
             return False
 
         else:
-            printLog("--------------------------------------------------")
             printLog("Executing backup task: \"%s\"" % bckentry['name'])
             if not os.path.isdir(path_target_dir):
-                printError("Config file: %s" % self.path_config_file)
-                printError("Section: [%s]" % bckentry['section'])
-                printError("Result directory does not exists: %s" % path_target_dir)
-                sys.exit(1)
+                comment = "Result directory does not exists: %s" % path_target_dir
+                exit_config_error(self.path_config_file, bckentry['section'], comment)
             printLog("Creating archive: %s" % filepath)
             printLog("Compressing method: %s" % bckentry['method'])
             printLog("Free space in target dir: %s" % get_dir_free_space(path_target_dir))
@@ -523,9 +558,9 @@ class Backupy:
             elif bckentry['method'] == "targz":
                 mode = "w:gz"
             else:
-                printError("Error: wrong tar compress method (%s)." % bckentry['method'])
-                printError("Exiting")
-                sys.exit(1)
+                comment = ["Wrong compression method declared (%s)" % bckentry['method'],
+                           "method = { tar ; targz ; zip}"]
+                exit_config_error(self.path_config_file, bckentry['section'], comment)
 
             # http://stackoverflow.com/a/39321142/4325232
             dereference = True if bckentry['followsym'] == "yes" else False
@@ -533,7 +568,8 @@ class Backupy:
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dir']:
-                    archive.add(entry, filter=self.filter_general())
+                    # TODO: workaround for exclude: filter_general(something)
+                    archive.add(entry, filter=self.filter_general)
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dir']:
                     archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
