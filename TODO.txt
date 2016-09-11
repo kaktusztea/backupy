@@ -1,16 +1,10 @@
 ### EXCLUSION ========================================================
-* 'exclude_dir_names'
-
-!BUG!  * also excludes if matches in full path anywhere
+!BUG!  * also excludes if matches in full path anywhere    ('temp')
     -> exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
   * # comment does not work??
 
-* exclude_dir_fullpathes
-  *  does not work yet (cut trailing "/"!)  compress_tar
+* filter include_dir duplicates in config file
 
-* filter include duplicates at bottom dir level
-
-* create_config_file(): store config lines in a fix order
 
 
 
@@ -20,18 +14,20 @@
 
 
 ### TODO =============================================================
+* create_config_file(): store config lines in a fix order
 * [META] section
   description = "This is my set for weekly data backup"
   author = myuser
   creation_date = 2016-09-01
 
-* print elapsed time at the end
-  
 * exclude_unique_file1  -> implement
+
+* print elapsed time at the end  
+
 ...
 * overwrite = yes/no
 
-* read, validate 'exclude_dir_fullpathes'
+* 'exclude_dir_fullpathes' cut trailing '/'
 
 * compress_zip()
   * Implement "follow symlinks" feature
@@ -39,6 +35,7 @@
 
 
 ### FEATURE ==========================================================
+* filelist txt
 * [HOME_CONFIGS] unique section
  * only $HOME/.* files, dirs, no symlink follow, targz fixed, withpath yes, 
    * enabled; result_dir; ..

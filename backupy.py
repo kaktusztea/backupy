@@ -17,13 +17,13 @@ except ImportError:
     zcompression = zipfile.ZIP_STORED
 
 __author__ = 'kaktusz'
-__version__ = '0.8'
+__version__ = '1.0'
 
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
 colorblue = '\033[1;2;34m'
-debug = False
+debug = True
 sep = os.path.sep
 
 
@@ -83,14 +83,14 @@ def add_dot_for_endings(endinglist):
     return endinglist
 
 
-def getsub_dir_path(root, entry):
-    if not root.startswith("/") or not entry.startswith("/"):
+def getsub_dir_path(root, longpath):
+    if not root.startswith("/") or not longpath.startswith("/"):
         return False
     root = strip_dash_string_end(root)
-    entry = strip_dash_string_end(entry)
+    longpath = strip_dash_string_end(longpath)
 
-    len_entry = len(str.split(entry, '/'))
-    temp = root.split("/")[len_entry-1:]
+    len_root = len(str.split(root, '/'))
+    temp = longpath.split("/")[len_root - 1:]
     return os.path.join(*temp)
 
 
@@ -359,6 +359,7 @@ class Backupy:
                         if len(ll) > 0:
                             bconfig['exclude_dir_fullpath'].append(ll)
                         i += 1
+                    bconfig['exclude_dir_fullpath'] = strip_enddash_on_list(bconfig['exclude_dir_fullpath'])
 
                     # exclude_dir_names
                     ll = cfghandler.get(section, 'exclude_dir_names', raw=False)
@@ -413,6 +414,9 @@ class Backupy:
                         exit_config_error(config_file, section, comment)
 
                     self.check_mandatory_options(bconfig)
+                    if not self.check_include_dir_dups(bconfig):
+                        exit_config_error(config_file, section, "'include_dirN' duplicates are not allowed.")
+
                     allconfigs[section] = bconfig
             if not self.check_archivename_unique(allconfigs):
                 exit_config_error(config_file, "General error", "'archive_name'+'result_dir' combo should be unique between enabled backup entries!")
@@ -482,7 +486,11 @@ class Backupy:
                     return False
         return True
 
-    def filter_general(self, item):
+    @staticmethod
+    def check_include_dir_dups(bconfig):
+        return len(bconfig['include_dir']) == len(set(bconfig['include_dir']))
+
+    def filter_general(self, item, root_dir=''):
         mode = ""
         retval = ""
         filenamefull = ""
@@ -491,7 +499,7 @@ class Backupy:
             mode = "zip"
             retval = False
         elif isinstance(item, tarfile.TarInfo):
-            filenamefull = item.name
+            filenamefull = os.path.join(root_dir, item.name)
             mode = "tar"
             retval = None
 
@@ -503,7 +511,7 @@ class Backupy:
             printDebug("User exclude ending: %s" % filenamefull)  # DEBUG
             return retval
 
-        #  exclude_file; only Pycharm-PEP8 warning
+        #  exclude_files; only Pycharm-PEP8 warning
         elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
             printDebug("Global exclude file: %s" % filenamefull)  # DEBUG
             return retval
@@ -512,17 +520,18 @@ class Backupy:
             return retval
 
         # exclude_dir_names; only Pycharm-PEP8 warning
-        # TODO:only after the basedir!!
-        # ll = getsub_dir_path(os.path.basename(filenamefull))    # TODO: get root dir!
-        if any(dirname in filenamefull.split("/") for dirname in self.configs_global['exclude_dir_names']):
+        ll = getsub_dir_path(root_dir, filenamefull)
+        if any(dirname in ll.split("/") for dirname in self.configs_global['exclude_dir_names']):
             printDebug("Global exclude dir names matched at: %s" % filenamefull)  # DEBUG
             return retval
-        if any(dirname in filenamefull.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
+        # TODO: cut heading '/' at split;
+        if any(dirname in ll.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
             printDebug("User exclude dir names matched at: %s" % filenamefull)    # DEBUG
             return retval
 
+        # TODO: strip trailing '/' (not here)
         # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
-        if any(dirname == os.path.basename(filenamefull) for dirname in self.configs_user[self.cfg_actual]['exclude_dir_fullpath']):
+        if any(dirname in filenamefull for dirname in self.configs_user[self.cfg_actual]['exclude_dir_fullpath']):
             printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)    # DEBUG
             return retval
 
@@ -561,7 +570,6 @@ class Backupy:
 
     def compress_tar(self, bckentry):
         """ Compressing with tar/targz method """
-
         archive = ""
         filepath = bckentry['archivefullpath']
         try:
@@ -583,11 +591,11 @@ class Backupy:
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dir']:
-                    # TODO: workaround for exclude: filter_general(something)
-                    archive.add(entry, filter=self.filter_general)
+                    archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dir']:
-                    archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
+                    # archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
+                    archive.add(entry, arcname=os.path.basename(entry), filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
             else:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                 sys.exit(1)
@@ -613,24 +621,22 @@ class Backupy:
 
     def compress_zip(self, bckentry):
         """ Compressing with zip method """
-        # TODO: need to add description?
-
-        # TODO: Exclude def: only with full path in .cfg file!!
-
         archive = ""
         filepath = bckentry['archivefullpath']
         try:
             archive = zipfile.ZipFile(file=filepath, mode="w", compression=zcompression)
-            # archive.comment = bckentry['description']
+            # archive.comment = bckentry['description']            # TODO: need to add description?
+
+            # filtering + adding procedure starts by walking through on every file path
             for entry in bckentry['include_dir']:
-                for root, dirs, files in os.walk(top=entry, followlinks=True):
+                for subdir, dirs, files in os.walk(top=entry, followlinks=True):
                     for filename in files:
-                        dirpart = getsub_dir_path(root, entry)
-                        if self.filter_general(os.path.join(root, filename)):    # TODO: None as return code is passing! BUG!
+                        dirpart = getsub_dir_path(entry, subdir)
+                        if self.filter_general(os.path.join(subdir, filename), entry):
                             if bckentry['withpath'] == 'yes':
-                                archive.write(filename=os.path.join(root, filename), compress_type=zcompression)
+                                archive.write(filename=os.path.join(subdir, filename), compress_type=zcompression)
                             elif bckentry['withpath'] == 'no':
-                                archive.write(filename=os.path.join(root, filename), arcname=os.path.join(dirpart, filename), compress_type=zcompression)
+                                archive.write(filename=os.path.join(subdir, filename), arcname=os.path.join(dirpart, filename), compress_type=zcompression)
                             else:
                                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                                 sys.exit(1)
