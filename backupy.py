@@ -265,7 +265,7 @@ class Backupy:
               "  *enabled = yes                        # is this backup active. {yes, no}\n"
               "  *archive_name = document_backup       # archive file name without extension\n"
               "  *result_dir = /home/joe/mybackups     # Where to create the archive file\n"
-              "  *method = targz                       # Compression method {tar, targz, zip}\n"
+              "  *method = targz                       # Compression method {tar, targz, tarbz2, zip}\n"
               "  *followsym = yes                      # Should compressor follow symlinks\n"
               "  *withpath = no                        # compress files with or without full path\n"
               "  *include_dir1 = /home/joe/humour      # included directory 1. (at least one is mandatory)\n"
@@ -403,11 +403,13 @@ class Backupy:
                         bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar'
                     elif bconfig['method'] == 'targz':
                         bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
+                    elif bconfig['method'] == 'tarbz2':
+                        bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar.bz2'
                     elif bconfig['method'] == 'zip':
                         bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.zip'
                     else:
                         comment = ["Wrong compression method declared (%s)" % bconfig['method'],
-                                   "method = { tar ; targz ; zip}"]
+                                   "method = { tar ; targz ; tarbz2; zip}"]
                         exit_config_error(config_file, section, comment)
 
                     self.check_mandatory_options(bconfig)
@@ -568,9 +570,11 @@ class Backupy:
                 mode = "w"
             elif bckentry['method'] == "targz":
                 mode = "w:gz"
+            elif bckentry['method'] == "tarbz2":
+                mode = "w:bz2"
             else:
                 comment = ["Wrong compression method declared (%s)" % bckentry['method'],
-                           "method = { tar ; targz ; zip}"]
+                           "method = { tar ; targz ; tarbz2; zip}"]
                 exit_config_error(self.path_config_file, bckentry['section'], comment)
 
             # http://stackoverflow.com/a/39321142/4325232
@@ -670,7 +674,7 @@ class Backupy:
 
             if self.compress_pre(bckentry['result_dir'], bckentry):
                 print("%s Starting backup" % get_time())
-                if mode == "tar" or mode == "targz":
+                if mode == "tar" or mode == "targz" or mode == "tarbz2":
                     self.compress_tar(bckentry)
                 elif mode == "zip":
                     self.compress_zip(bckentry)
