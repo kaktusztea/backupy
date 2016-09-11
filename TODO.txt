@@ -1,34 +1,52 @@
-### BUG
--
-
-### EXCLUSION
+### EXCLUSION ========================================================
 * 'exclude_dir_names'
-  * also excludes if matches in full path anywhere
+
+!BUG!  * also excludes if matches in full path anywhere
     -> exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
   * # comment does not work??
+
 * exclude_dir_fullpathes
-  *  does not work yet (cut trailing "/"!)
+  *  does not work yet (cut trailing "/"!)  compress_tar
 
 * filter include duplicates at bottom dir level
 
 * create_config_file(): store config lines in a fix order
 
 
-### TODO
+
+### BUG ==============================================================
+-
+
+
+
+### TODO =============================================================
+* check if archive_name is unique in backup set!!
 * overwrite = yes/no
 * read, validate 'exclude_dir_fullpathes'
 * compress_zip()
   * Implement "follow symlinks" feature
 
 
-### FEATURE 
+
+### FEATURE ==========================================================
+* [HOME_CONFIGS] unique section
+ * only $HOME/.* files, dirs, no symlink follow, targz fixed, withpath yes, 
+   * enabled; result_dir; ..
+   * filelista array should be constructed (it slows a little)
+* automatic # handling, boolean values validation
+http://stackoverflow.com/questions/27966461/extendedinterpolation-in-the-python-2-7-configparser
+* Section class  (is this in configparser?)
+  * self-validation, strip, trim at set() time!
+  http://stackoverflow.com/questions/4014621/a-python-class-that-acts-like-dict
+  https://docs.python.org/3/reference/datamodel.html?emulating-container-types#emulating-container-types
 * reserve and move n previous backups
 * comment file addition to archive
 * filelist file creation from archive - after compression
 * calculate estimated file size with free space
   http://stackoverflow.com/questions/12480367/how-to-generate-directory-size-recursively-in-python-like-du-does
 
-### TEST
+
+### TEST =============================================================
 * write testcases
 
 

@@ -28,7 +28,8 @@ sep = os.path.sep
 
 
 def strip_hash_string_end(line):
-    return line.split("#")[0].rstrip()
+    if isinstance(line, str):
+        return line.split("#")[0].rstrip()
 
 
 def strip_dash_string_end(line):
@@ -323,7 +324,8 @@ class Backupy:
             sys.exit(1)
 
         allconfigs = {}
-        cfghandler = configparser.ConfigParser()
+        cfghandler = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+        cfghandler.optionxform = str
         try:
             cfghandler.read(config_file)
             section_list = cfghandler.sections()
@@ -410,6 +412,7 @@ class Backupy:
 
                     self.check_mandatory_options(bconfig)
                     allconfigs[section] = bconfig
+            self.check_archivename_unique(allconfigs)
 
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % config_file)
@@ -466,6 +469,17 @@ class Backupy:
             if bckentry[opss] not in ['yes', 'no']:
                 comment = "'%s' = {yes, no}" % opss
                 exit_config_error(self.path_config_file, bckentry['section'], comment)
+
+    def check_archivename_unique(self, allconfigs):
+        ll = [bentry['archive_name'] for section, bentry in allconfigs.items() if bentry['enabled'] == 'yes']
+        # ll = []
+        # for section, bentry in allconfigs.items():
+        #     if bentry['enabled'] == 'yes':
+        #         ll.append(bentry['archive_name'])
+        if len(ll) != len(set(ll)):
+            printError(self.path_config_file)
+            printError("'archive_name' should be unique between enabled backup entries!")
+            sys.exit(1)
 
     def filter_general(self, item):
         mode = ""
