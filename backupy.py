@@ -23,7 +23,7 @@ colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
 colorblue = '\033[1;2;34m'
-debug = True
+debug = False
 sep = os.path.sep
 
 
@@ -594,7 +594,7 @@ class Backupy:
                     archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dir']:
-                    # archive.add(entry, arcname=os.path.basename(entry), filter=self.filter_general)
+                    # http://stackoverflow.com/questions/39438335/python-how-could-i-access-tarfile-adds-name-parameter-in-adds-filter-me
                     archive.add(entry, arcname=os.path.basename(entry), filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
             else:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")

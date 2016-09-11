@@ -1,0 +1,18 @@
+Hi! 
+
+Thanks for using backupy. v1.0 is pretty solid, but development does not stop.
+
+The following features will come soon:
+* HOME_CONFIG unique backup
+* unique full-path-file exclusion (i.e exclude a certain, huge, unneeded file)
+* reserve and move n previous backups to a different directory
+* debug logfile
+* [META] section - informations for the backup set
+  description = "This is my set for weekly data backup"
+  author = myuser
+  creation_date = 2016-09-01
+* filelist logfile creation about compressed filepathes
+* pre-calculate estimated file size -> predict if free space will be enough or not
+
+regards,
+Bálint
