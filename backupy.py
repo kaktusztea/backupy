@@ -21,9 +21,9 @@ __version__ = '0.8'
 
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
-# coloryellow = '\033[0;33m'
 coloryellow = '\033[0;93m'
-debug = True
+colorblue = '\033[1;2;34m'
+debug = False
 sep = os.path.sep
 
 
@@ -413,7 +413,7 @@ class Backupy:
                     self.check_mandatory_options(bconfig)
                     allconfigs[section] = bconfig
             if not self.check_archivename_unique(allconfigs):
-                exit_config_error(config_file, "General error", "'archive_name' should be unique between enabled backup entries!")
+                exit_config_error(config_file, "General error", "'archive_name'+'result_dir' combo should be unique between enabled backup entries!")
 
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % config_file)
@@ -542,15 +542,13 @@ class Backupy:
         if bckentry['enabled'].lower() != "yes":
             printLog("Backup entry \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
             return False
+        printLog("Executing backup task: \"" + colorblue + bckentry['name'] + colorreset + "\"")
         if os.path.isfile(filepath):
-            printLog("Executing backup '%s'" % bckentry['name'])
             printWarning("There is already an archive with this name:")
             printWarning("%s" % filepath)
             printWarning("Skipping")
             return False
-
         else:
-            printLog("Executing backup task: \"%s\"" % bckentry['name'])
             if not os.path.isdir(path_target_dir):
                 comment = "Result directory does not exists: %s" % path_target_dir
                 exit_config_error(self.path_config_file, bckentry['section'], comment)
