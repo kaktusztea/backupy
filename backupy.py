@@ -173,6 +173,13 @@ def printDebug(log):
         printLog(coloryellow + log + colorreset)
 
 
+def exit_with_config_error(config_file, section, comment):
+    printError("%s" % config_file)
+    printError("[%s]" % section)
+    printError(comment)
+    sys.exit(1)
+
+
 def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -337,24 +344,25 @@ class Backupy:
                     bconfig['exclude_files'] = list(map(str.strip, ll.split(',')))
 
                     bconfig = strip_hash_on_dict_values(bconfig)
+
                     if check_string_contains_spaces(bconfig['archive_name']):
                         printError("Space in archive name is not allowed: %s" % bconfig['archive_name'])
                         sys.exit(1)
+                    if bconfig['archive_name'].strip() == '':
+                        errmsg = "'archive_name' can not be empty."
+                        exit_with_config_error(config_file, section, errmsg)
+
                     for n, inclpath in enumerate(bconfig['include_dir']):
                         if check_string_contains_spaces(inclpath) or check_string_contains_comma(inclpath):
-                            printError("%s" % config_file)
-                            printError("[%s]" % section)
-                            printError("Space, comma in 'include_dir%s' is not allowed" % str(n+1))
-                            sys.exit(1)
+                            errmsg = "Space, comma in 'include_dir"+str(n+1)+" is not allowed"
+                            exit_with_config_error(config_file, section, errmsg)
                     for n, exclpath in enumerate(bconfig['exclude_dir_fullpath']):
                         if check_string_contains_spaces(exclpath) or check_string_contains_comma(exclpath):
-                            printError("%s" % config_file)
-                            printError("[%s]" % section)
-                            printError("Space, comma in 'eclude_dir%s' is not allowed" % str(n+1))
-                            printError("Exiting")
-                            sys.exit(1)
+                            errmsg = "Space, comma in 'eclude_dir%s' is not allowed" % str(n+1)
+                            exit_with_config_error(config_file, section, errmsg)
 
                     bconfig['archivefullpath'] = 'replace_this'
+
                     if bconfig['method'] == 'tar':
                         bconfig['archive_name'] += '_' + get_date() + '_' + get_time_short() + '.tar'
                     elif bconfig['method'] == 'targz':
@@ -373,6 +381,7 @@ class Backupy:
             printError("%s" % err.message)
             sys.exit(1)
         else:
+            printLog("Config file is valid: %s" % config_file)
             return allconfigs
 
     def check_first_run(self):
