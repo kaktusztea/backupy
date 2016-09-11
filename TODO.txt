@@ -20,7 +20,6 @@
 
 
 ### TODO =============================================================
-* check if archive_name is unique in backup set!!
 * overwrite = yes/no
 * read, validate 'exclude_dir_fullpathes'
 * compress_zip()

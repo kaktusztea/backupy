@@ -412,7 +412,8 @@ class Backupy:
 
                     self.check_mandatory_options(bconfig)
                     allconfigs[section] = bconfig
-            self.check_archivename_unique(allconfigs)
+            if not self.check_archivename_unique(allconfigs):
+                exit_config_error(config_file, "General error", "'archive_name' should be unique between enabled backup entries!")
 
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % config_file)
@@ -470,16 +471,14 @@ class Backupy:
                 comment = "'%s' = {yes, no}" % opss
                 exit_config_error(self.path_config_file, bckentry['section'], comment)
 
-    def check_archivename_unique(self, allconfigs):
-        ll = [bentry['archive_name'] for section, bentry in allconfigs.items() if bentry['enabled'] == 'yes']
-        # ll = []
-        # for section, bentry in allconfigs.items():
-        #     if bentry['enabled'] == 'yes':
-        #         ll.append(bentry['archive_name'])
-        if len(ll) != len(set(ll)):
-            printError(self.path_config_file)
-            printError("'archive_name' should be unique between enabled backup entries!")
-            sys.exit(1)
+    @staticmethod
+    def check_archivename_unique(allconfigs):
+        ll = {bentry['section']: [bentry['archive_name'], bentry['result_dir']] for section, bentry in allconfigs.items() if bentry['enabled'] == 'yes'}
+        for section, elem in ll.items():
+            for section2, elem2 in ll.items():
+                if section != section2 and elem[0] == elem2[0] and elem[1] == elem2[1]:
+                    return False
+        return True
 
     def filter_general(self, item):
         mode = ""
