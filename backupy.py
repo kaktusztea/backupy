@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+    backupy: a handly tool for selectively backup your data
+
+    Features:
+    * backup sets separatable in unique files (passed as command line parameter)
+    * unique backup entries in backup sets (up to 99)
+    * global exclude lists (file, dir, filetype) for entire backup set
+    * every backup entry is customizable
+        * enabled / disabled
+        * archive file name
+        * compression method (tar, targz, tarbz2, zip)
+        * store files/directories with/without full path
+        * follow symlinks (yes/no)
+        * include directories
+        * exclude directory names
+        * exclude directory with fullpath
+        * exclude filenames
+        * exclude filetypes (special: '~' ==> mynovel.doc~ )
+        * result dir
+"""
 
 import re
 import os
@@ -17,8 +37,14 @@ except ImportError:
     zcompression = zipfile.ZIP_STORED
 
 # Globals
-__author__ = 'kaktusz'
-__version__ = '1.0'
+__author__ = 'Balint Fekete'
+__copyright__ = 'Copyright 2016, Balint Fekete'
+__license__ = 'GPLv3'
+__version__ = '1.0.1'
+__maintainer__ = 'Balint Fekete'
+__email__ = 'kaktusztea at_ protonmail.ch'
+__status__ = 'Production'
+
 debug = False
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
