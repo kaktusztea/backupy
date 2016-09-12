@@ -1,7 +1,5 @@
 ### BUG ==============================================================
-* fullpath + exclude_dir
-  → also excludes if matches in full path anywhere    ('temp')
-  → exact match needed (dirs[n] == exdir for exdir in bckconfig['exclude_dir_names'])
+-
 
 
 
@@ -10,6 +8,7 @@
 
 * create_config_file(): store config lines in a fix order
 
+* unify strip defs?
 
 * print elapsed time at the end  
 
@@ -44,7 +43,9 @@
 * comment file addition to archive
 
 * filelist file creation from archive - after compression
-  
+
+* create md5sum from archive file
+
 * pre-calculate estimated file size -> predict if free space will be enough or not
   http://stackoverflow.com/questions/12480367/how-to-generate-directory-size-recursively-in-python-like-du-does
   [GLOBAL]

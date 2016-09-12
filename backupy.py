@@ -16,15 +16,14 @@ try:
 except ImportError:
     zcompression = zipfile.ZIP_STORED
 
+# Globals
 __author__ = 'kaktusz'
 __version__ = '1.0'
-
+debug = False
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
 colorblue = '\033[1;2;34m'
-debug = False
-sep = os.path.sep
 
 
 def strip_hash_string_end(line):
@@ -395,7 +394,7 @@ class Backupy:
                     # exclude_dir_fullpath
                     for n, exclpath in enumerate(bconfig['exclude_dir_fullpath']):
                         if check_string_contains_spaces(exclpath) or check_string_contains_comma(exclpath):
-                            errmsg = "Space, comma in 'eclude_dir%s' is not allowed" % str(n+1)
+                            errmsg = "Space, comma in 'exclude_dir%s' is not allowed" % str(n+1)
                             exit_config_error(config_file, section, errmsg)
 
                     bconfig['archivefullpath'] = 'replace_this'
@@ -505,34 +504,32 @@ class Backupy:
 
         # exclude_endings; only Pycharm-PEP8 warning
         if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
-            printDebug("Global exclude ending: %s" % filenamefull)  # DEBUG
+            printDebug("Global exclude ending: %s" % filenamefull)
             return retval
         elif filenamefull.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
-            printDebug("User exclude ending: %s" % filenamefull)  # DEBUG
+            printDebug("User exclude ending: %s" % filenamefull)
             return retval
 
         #  exclude_files; only Pycharm-PEP8 warning
         elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
-            printDebug("Global exclude file: %s" % filenamefull)  # DEBUG
+            printDebug("Global exclude file: %s" % filenamefull)
             return retval
         elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_files']:
-            printDebug("User exclude file: %s" % filenamefull)  # DEBUG
+            printDebug("User exclude file: %s" % filenamefull)
             return retval
 
         # exclude_dir_names; only Pycharm-PEP8 warning
         ll = getsub_dir_path(root_dir, filenamefull)
         if any(dirname in ll.split("/") for dirname in self.configs_global['exclude_dir_names']):
-            printDebug("Global exclude dir names matched at: %s" % filenamefull)  # DEBUG
+            printDebug("Global exclude dir names matched at: %s" % filenamefull)
             return retval
-        # TODO: cut heading '/' at split;
-        if any(dirname in ll.split("/") for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
-            printDebug("User exclude dir names matched at: %s" % filenamefull)    # DEBUG
+        if any(dirname in ll.split("/")[1:] for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
+            printDebug("User exclude dir names matched at: %s" % filenamefull)
             return retval
 
-        # TODO: strip trailing '/' (not here)
         # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
         if any(dirname in filenamefull for dirname in self.configs_user[self.cfg_actual]['exclude_dir_fullpath']):
-            printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)    # DEBUG
+            printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)
             return retval
 
         # No filtering occured, file can be passed to compressor
