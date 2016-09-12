@@ -8,13 +8,14 @@
 * every backup entry is customizable
     * enabled / disabled
     * archive file name
-    * compression method (tar, targz, zip)
+    * compression method (tar, targz, tarbz2, zip)
     * store files/directories with/without full path
-    * follow symlinks
+    * follow symlinks (yes/no)
     * include directories
-    * exclude directories
+    * exclude directory names
+    * exclude directory with fullpath
     * exclude filenames
-    * exclude filetypes
+    * exclude filetypes (special: '~' ==> mynovel.doc~ )
     * result dir
  
 ## Basics ##
@@ -51,8 +52,8 @@ git clone https://bitbucket.org/kaktusztea/backupy.git
 ```
 #!bash
 
-vi ~/.config/backupy/default.cfg
-./backupy.py
+vi ~/.config/backupy/default.cfg   (customize)
+./backupy.py   (start backup with default backup set)
 ```
 
 
@@ -62,13 +63,13 @@ vi ~/.config/backupy/default.cfg
 #!bash
 
 cp ~/.config/backupy/default.cfg /my/path/mybackup.cfg
-vi /my/path/mybackup.cfg
+vi /my/path/mybackup.cfg   (customize)
 ./backupy.py /my/path/mybackup.cfg
 
 ```
 
 ## Contact ##
-If you have comments, or just want to explain how awesome this script is :) - write a mail:
+If you have comments, found a bug or just want to explain how awesome this script is :) - write a mail:
 
 
 ```
