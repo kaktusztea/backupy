@@ -101,6 +101,13 @@ def check_string_contains_comma(line):
         return False
 
 
+def check_if_symlink_broken(path):
+    if os.path.islink(path) and not os.path.exists(path):
+        return True
+    else:
+        return False
+
+
 def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith(".") and elem != "~":
@@ -517,46 +524,50 @@ class Backupy:
 
     def filter_general(self, item, root_dir=''):
         mode = ""
-        retval = ""
+        retval_skip = ""
         filenamefull = ""
         if isinstance(item, str):
             filenamefull = item
             mode = "zip"
-            retval = False
+            retval_skip = False
         elif isinstance(item, tarfile.TarInfo):
             filenamefull = os.path.join(root_dir, item.name)
             mode = "tar"
-            retval = None
+            retval_skip = None
+
+        # if check_if_symlink_broken(filenamefull):
+        #     printWarning("broken symlink (skip): %s" % filenamefull)
+        #     return retval_skip
 
         # exclude_endings; only Pycharm-PEP8 warning
         if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
             printDebug("Global exclude ending: %s" % filenamefull)
-            return retval
+            return retval_skip
         elif filenamefull.endswith(tuple(self.configs_user[self.cfg_actual]['exclude_endings'])):
             printDebug("User exclude ending: %s" % filenamefull)
-            return retval
+            return retval_skip
 
         #  exclude_files; only Pycharm-PEP8 warning
         elif get_leaf_from_path(filenamefull) in self.configs_global['exclude_files']:
             printDebug("Global exclude file: %s" % filenamefull)
-            return retval
+            return retval_skip
         elif get_leaf_from_path(filenamefull) in self.configs_user[self.cfg_actual]['exclude_files']:
             printDebug("User exclude file: %s" % filenamefull)
-            return retval
+            return retval_skip
 
         # exclude_dir_names; only Pycharm-PEP8 warning
         ll = getsub_dir_path(root_dir, filenamefull)
         if any(dirname in ll.split("/") for dirname in self.configs_global['exclude_dir_names']):
             printDebug("Global exclude dir names matched at: %s" % filenamefull)
-            return retval
+            return retval_skip
         if any(dirname in ll.split("/")[1:] for dirname in self.configs_user[self.cfg_actual]['exclude_dir_names']):
             printDebug("User exclude dir names matched at: %s" % filenamefull)
-            return retval
+            return retval_skip
 
         # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
         if any(dirname in filenamefull for dirname in self.configs_user[self.cfg_actual]['exclude_dir_fullpath']):
             printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)
-            return retval
+            return retval_skip
 
         # No filtering occured, file can be passed to compressor
         if mode == "zip":
@@ -625,17 +636,16 @@ class Backupy:
         except (IOError, OSError) as err:
             # TODO: it is not necessary handle every type of exception. Just write 'errno' and 'strerror'
             if err.errno == errno.EACCES:
-                # printLog("OSError: Permission denied on %s" % filepath)
-                printLog("OSError: %s on %s" % (os.strerror(err.errno), filepath))
+                printError("OSError: %s on %s" % (os.strerror(err.errno), filepath))
                 sys.exit(err.errno)
             if err.errno == errno.ENOSPC:
-                printLog("OSError: No space on disk")
+                printError("OSError: No space on disk")
                 sys.exit(err.errno)
             if err.errno == errno.ENOENT:
-                printLog("IOError/OSError: No such file or directory to compress: %s" % filepath)
+                printError("IOError/OSError: broken symlink or can not find ")
                 sys.exit(err.errno)
             else:
-                printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
+                printError("IOError/OSError: Unhandled exception: %s" % err.strerror)
                 sys.exit(99)
         finally:
             archive.close()
@@ -656,10 +666,16 @@ class Backupy:
                     for filename in files:
                         dirpart = getsub_dir_path(entry, subdir)
                         if self.filter_general(os.path.join(subdir, filename), entry):
+                            file_fullpath = os.path.join(subdir, filename)
+
+                            if check_if_symlink_broken(file_fullpath):
+                                printWarning("broken symlink (skip): %s" % file_fullpath)
+                                continue
+
                             if bckentry['withpath'] == 'yes':
-                                archive.write(filename=os.path.join(subdir, filename), compress_type=zcompression)
+                                archive.write(filename=file_fullpath, compress_type=zcompression)
                             elif bckentry['withpath'] == 'no':
-                                archive.write(filename=os.path.join(subdir, filename), arcname=os.path.join(dirpart, filename), compress_type=zcompression)
+                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
                             else:
                                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                                 sys.exit(1)
