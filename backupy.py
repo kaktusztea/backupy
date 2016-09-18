@@ -40,9 +40,9 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2016, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 __maintainer__ = 'Balint Fekete'
-__email__ = 'kaktusztea at_ protonmail.ch'
+__email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
 
 debug = False
@@ -659,46 +659,56 @@ class Backupy:
         try:
             archive = zipfile.ZipFile(file=filepath, mode="w", compression=zcompression)
             # archive.comment = bckentry['description']            # TODO: need to add description?
-
-            # filtering + adding procedure starts by walking through on every file path
-            for entry in bckentry['include_dir']:
-                for subdir, dirs, files in os.walk(top=entry, followlinks=True):
-                    for filename in files:
-                        dirpart = getsub_dir_path(entry, subdir)
-                        if self.filter_general(os.path.join(subdir, filename), entry):
-                            file_fullpath = os.path.join(subdir, filename)
-
-                            if check_if_symlink_broken(file_fullpath):
-                                printWarning("broken symlink (skip): %s" % file_fullpath)
-                                continue
-
-                            try:
-                                if bckentry['withpath'] == 'yes':
-                                    archive.write(filename=file_fullpath, compress_type=zcompression)
-                                elif bckentry['withpath'] == 'no':
-                                    archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
-                                else:
-                                    printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
-                                    sys.exit(1)
-                            except UnicodeEncodeError as err:
-                                printWarning("File name encoding problem with a file in dir: " + subdir)
-                                printWarning("Skipping this file")
-                                continue
-
         except (IOError, OSError) as err:
+            if archive:
+                archive.close()
             if err.errno == errno.EACCES:
-                printLog("IOError/OSError: Can't write to this file: %s" % filepath)
+                printError("OSError: Can't write to this file: %s" % filepath)
                 sys.exit(err.errno)
-            if err.errno == errno.ENOSPC:
-                printLog("IOError/OSError: No space on disk")
-                sys.exit(err.errno)
-            if err.errno == errno.ENOENT:
-                printLog("IOError/OSError: No such file or directory to compress: %s" % filepath)
+            elif err.errno == errno.ENOSPC:
+                printError("IOError/OSError: No space on disk")
                 sys.exit(err.errno)
             else:
-                printLog("IOError/OSError: Unhandled error: %s" % err.strerror)
+                printError("IOError/OSError: Unhandled error: %s" % err.strerror)
                 sys.exit(99)
-        finally:
+
+        # filtering + adding procedure starts by walking through on every file path
+        for entry in bckentry['include_dir']:
+            for subdir, dirs, files in os.walk(top=entry, followlinks=True):
+                for filename in files:
+                    dirpart = getsub_dir_path(entry, subdir)
+                    if self.filter_general(os.path.join(subdir, filename), entry):
+                        file_fullpath = os.path.join(subdir, filename)
+
+                        if check_if_symlink_broken(file_fullpath):
+                            printWarning("broken symlink (skip): %s" % file_fullpath)
+                            continue
+
+                        try:
+                            if bckentry['withpath'] == 'yes':
+                                archive.write(filename=file_fullpath, compress_type=zcompression)
+                            elif bckentry['withpath'] == 'no':
+                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
+                            else:
+                                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
+                                sys.exit(1)
+                        except (UnicodeEncodeError, IOError, OSError, PermissionError) as err:
+                            if isinstance(err, UnicodeEncodeError):
+                                printWarning("Skip file (name encoding problem in dir): " + subdir)
+                                continue
+                            if isinstance(err, PermissionError):
+                                try:
+                                    printWarning("Skip file (permission error): %s " % file_fullpath)
+                                except UnicodeEncodeError:
+                                    printWarning("Skip file (permission AND name encoding problem somewhere in dir): " + subdir)
+                                continue
+                            elif err.errno == errno.ENOENT:
+                                printLog("OSError: No such file or directory to compress: %s" % filepath)
+                                continue
+                            else:
+                                printLog("Unhandled IOError/OSError: %s" % err.strerror)
+                                continue
+        if archive:
             archive.close()
         filesize = os.path.getsize(filepath)
         printLog("Done [%s]" % sizeof_fmt(filesize))
