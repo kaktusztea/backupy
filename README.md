@@ -19,12 +19,17 @@ Copyright 2016, Balint Fekete
     * exclude directory names
     * exclude directory with fullpath
     * exclude filenames
-    * exclude filetypes (special: '~' ==> mynovel.doc~ )
+    * exclude filetypes (special: '~'  →  mynovel.doc~ )
     * result dir
+
+## Known issues ##
+* (tar/targz/tarbz2 compress method + follow symlink + broken symlink) combo causes unhandled exception
+   http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken
+* follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
  
 ## Basics ##
 
-### Set up ###
+### Set up, get repo ###
 
 ```
 #!bash
@@ -71,6 +76,33 @@ vi /my/path/mybackup.cfg   (customize)
 ./backupy.py /my/path/mybackup.cfg
 
 ```
+
+## Planned features ##
+* exclude / include unique files
+
+* 7zip/lz support
+
+* [META] section
+  description = "This is my set for weekly data backup"
+  author = myuser
+  creation_date = 2016-09-01
+
+* [HOME_CONFIGS] unique backup section
+
+* remote compression target (ssh, etc)
+
+* reserve and move n previous backups
+
+* comment file addition to archive (zip)
+
+* filelist file creation from archive - after compression
+
+* create md5sum from archive file
+
+* pre-calculate estimated file size → predict if free space will be enough or not
+
+* logging
+
 
 ## Contact ##
 If you have comments, found a bug or just want to explain how awesome this script is :) - write a mail:

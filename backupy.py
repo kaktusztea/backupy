@@ -634,7 +634,6 @@ class Backupy:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                 sys.exit(1)
         except (IOError, OSError) as err:
-            # TODO: it is not necessary handle every type of exception. Just write 'errno' and 'strerror'
             if err.errno == errno.EACCES:
                 printError("OSError: %s on %s" % (os.strerror(err.errno), filepath))
                 sys.exit(err.errno)
@@ -642,7 +641,8 @@ class Backupy:
                 printError("OSError: No space on disk")
                 sys.exit(err.errno)
             if err.errno == errno.ENOENT:
-                printError("IOError/OSError: broken symlink or can not find ")
+                # TODO / http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken
+                printError("OSError: broken symlink or can not find file")
                 sys.exit(err.errno)
             else:
                 printError("IOError/OSError: Unhandled exception: %s" % err.strerror)
