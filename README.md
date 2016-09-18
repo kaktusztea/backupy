@@ -1,4 +1,6 @@
 **backupy** is a handy backup tool written in python 3.4.
+License: GPL3
+Copyright 2016, Balint Fekete
 
 ## Feature list ##
 
