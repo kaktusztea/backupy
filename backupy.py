@@ -672,13 +672,18 @@ class Backupy:
                                 printWarning("broken symlink (skip): %s" % file_fullpath)
                                 continue
 
-                            if bckentry['withpath'] == 'yes':
-                                archive.write(filename=file_fullpath, compress_type=zcompression)
-                            elif bckentry['withpath'] == 'no':
-                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
-                            else:
-                                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
-                                sys.exit(1)
+                            try:
+                                if bckentry['withpath'] == 'yes':
+                                    archive.write(filename=file_fullpath, compress_type=zcompression)
+                                elif bckentry['withpath'] == 'no':
+                                    archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
+                                else:
+                                    printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
+                                    sys.exit(1)
+                            except UnicodeEncodeError as err:
+                                printWarning("File name encoding problem with a file in dir: " + subdir)
+                                printWarning("Skipping this file")
+                                continue
 
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
