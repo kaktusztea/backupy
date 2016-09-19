@@ -23,8 +23,9 @@ Copyright 2016, Balint Fekete
     * result dir
 
 ## Known issues ##
-* (tar/targz/tarbz2 compress method + follow symlink + broken symlink) combo causes unhandled exception
-   http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken
+* (tar/targz/tarbz2 compress method + follow symlink + broken symlink) combo causes unhandled exception 
+   ( http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken )
+
 * follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
  
 ## Basics ##
@@ -82,10 +83,16 @@ vi /my/path/mybackup.cfg   (customize)
 
 * 7zip/lz support
 
-* [META] section
-  description = "This is my set for weekly data backup"
-  author = myuser
-  creation_date = 2016-09-01
+* META section
+  
+```
+#!bash
+   [META]
+   description = "This is my set for weekly data backup"
+   author = myuser
+   creation_date = 2016-09-01
+```
+
 
 * [HOME_CONFIGS] unique backup section
 
