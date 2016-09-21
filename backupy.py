@@ -88,24 +88,15 @@ def strip_enddash_on_list(endinglist):
 
 
 def check_string_contains_spaces(line):
-    if " " in line:
-        return True
-    else:
-        return False
+    return " " in line
 
 
 def check_string_contains_comma(line):
-    if "," in line:
-        return True
-    else:
-        return False
+    return "," in line
 
 
 def check_if_symlink_broken(path):
-    if os.path.islink(path) and not os.path.exists(path):
-        return True
-    else:
-        return False
+    return os.path.islink(path) and not os.path.exists(path)
 
 
 def add_dot_for_endings(endinglist):
@@ -292,7 +283,7 @@ class Backupy:
               "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
               "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
               "   exclude_dir_names = trash, garbage   # list of globally excluded directory names without path\n\n"
-              "   [BACKUP1]                            # Mandatory name pattern: BACKUP[0-9] (99 max) ; don't write anything after the number\n"
+              "   [BACKUP1]                            # Mandatory name pattern: BACKUP[1-99] (99 max) ; don't write anything after the number\n"
               "  *name = My Document backup            # write entry name here\n"
               "  *enabled = yes                        # is this backup active. {yes, no}\n"
               "  *archive_name = document_backup       # archive file name without extension\n"
@@ -312,9 +303,10 @@ class Backupy:
               "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
               "   * Mandatory options\n\n"
-              "Tip 1: use of comment sign '#' is allowed - at the end of option lines\n"
-              "Tip 2: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
-              "Tip 3: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
+              "Tip 1: Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!\n"
+              "Tip 2: use of comment sign '#' is allowed - at the end of option lines\n"
+              "Tip 3: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
+              "Tip 4: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
         if not os.path.exists(self.path_default_config_file):
             printWarning("\nYou did not run backupy init yet.")
             printWarning("Just run ./backupy.py and let it create default config for you.\n")
