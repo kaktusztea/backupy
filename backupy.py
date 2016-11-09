@@ -308,7 +308,7 @@ class Backupy:
               "Tip 3: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
               "Tip 4: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
         if not os.path.exists(self.path_default_config_file):
-            printWarning("\nYou did not run backupy init yet.")
+            printWarning("You did not run backupy init yet.")
             printWarning("Just run ./backupy.py and let it create default config for you.\n")
 
     @staticmethod
@@ -459,10 +459,10 @@ class Backupy:
             sys.exit(1)
         if not os.path.exists(self.path_default_configdir):
             try:
-                os.mkdir(self.path_default_configdir)
+                os.makedirs(name=self.path_default_configdir, exist_ok=True)
             except OSError as err:
                 printError("Cannot create user config dir: %s" % self.path_default_configdir)
-                printError("%s" % err.strerror)
+                printError("(%s)" % err.strerror)
                 sys.exit(1)
         if not os.path.exists(self.path_default_config_file):
             printLog("First run!")
