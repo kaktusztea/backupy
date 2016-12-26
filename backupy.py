@@ -247,8 +247,8 @@ class Backupy:
     """ Backupy class """
     def __init__(self):
         self.home_path = os.path.expanduser("~")
-        self.path_default_configdir = self.home_path + '/.config/backupy'
-        self.path_default_config_file = self.path_default_configdir + '/default.cfg'
+        self.path_default_configdir = os.path.join(self.home_path, '.config/backupy')
+        self.path_default_config_file = os.path.join(self.path_default_configdir, 'default.cfg')
 
         if len(sys.argv) == 2:
             if sys.argv[1] == "--help":
