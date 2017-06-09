@@ -99,6 +99,24 @@ def check_if_symlink_broken(path):
     return os.path.islink(path) and not os.path.exists(path)
 
 
+def get_broken_syms_in_recursive_subdir(subdir):
+    lista = []
+    for root, dirs, files in os.walk(subdir):
+        for file in files:
+            if check_if_symlink_broken(os.path.join(root, file)):
+                # lista.append(os.path.join(root, file))
+                lista.append(file)
+    return lista
+
+
+def get_broken_syms_to_exclude_list(bckentry):
+    # TODO: check bckentry consistency
+    broken_filepathes = []
+    for entry in bckentry['include_dir']:
+        broken_filepathes.extend(get_broken_syms_in_recursive_subdir(entry))
+    return broken_filepathes
+
+
 def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith(".") and elem != "~":
@@ -527,9 +545,10 @@ class Backupy:
             mode = "tar"
             retval_skip = None
 
-        # if check_if_symlink_broken(filenamefull):
-        #     printWarning("broken symlink (skip): %s" % filenamefull)
-        #     return retval_skip
+        # TODO: not working
+        if check_if_symlink_broken(filenamefull):
+            printWarning("broken symlink (skip): %s" % filenamefull)
+            return retval_skip
 
         # exclude_endings; only Pycharm-PEP8 warning
         if filenamefull.endswith(tuple(self.configs_global['exclude_endings'])):
@@ -573,7 +592,7 @@ class Backupy:
     def compress_pre(self, path_target_dir, bckentry):
         """" Checks and prints backup entry processing """
         filepath = os.path.join(path_target_dir, bckentry['archive_name'])
-        bckentry['archivefullpath'] = filepath
+        bckentry['archivefullpath'] = filepath    # TODO: this doesn't writes back, it's a local
 
         printLog("--------------------------------------------------")
         if bckentry['enabled'].lower() != "yes":
@@ -597,6 +616,7 @@ class Backupy:
     def compress_tar(self, bckentry):
         """ Compressing with tar/targz method """
         archive = ""
+        broken_symlist = []
         filepath = bckentry['archivefullpath']
         try:
             mode = ""
@@ -610,6 +630,9 @@ class Backupy:
                 comment = ["Wrong compression method declared (%s)" % bckentry['method'],
                            "method = { tar ; targz ; tarbz2; zip}"]
                 exit_config_error(self.path_config_file, bckentry['section'], comment)
+
+            # filter broken symlinks #TODO: gathers broken symlinks, but tarfile lib raises exception before filter runs
+            bckentry['exclude_files'].extend(get_broken_syms_to_exclude_list(bckentry))
 
             # http://stackoverflow.com/a/39321142/4325232
             dereference = True if bckentry['followsym'] == "yes" else False
