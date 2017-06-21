@@ -578,9 +578,13 @@ class Backupy:
             for sym in syms:
                 temp_target = os.path.join(self.path_stash, get_leaf_from_path(sym)) + '_' + get_random_string(7)
                 self.broken_syms[sym] = temp_target
-                shutil.move(sym, temp_target)
-                # TODO: place a dummy file instead of broken symlink: BROKEN_SYMLINK_mybroken.txt
-                # TODO: Delete it at pop phase
+                try:
+                    shutil.move(sym, temp_target)
+                    # TODO: place a dummy file instead of broken symlink: BROKEN_SYMLINK_mybroken.txt
+                    # TODO: Delete it at pop phase
+                except OSError as err:
+                    printError("Could not stash broken symlink: " + sym)
+                    printError("(%s)" % err.strerror)
             printDebug("Broken symlinks and their stash location pairs:")
             printDebug(self.broken_syms)
             return len(syms)
@@ -715,9 +719,10 @@ class Backupy:
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dir']:
-                    broken_syms = self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
-                    if broken_syms:
-                        printWarning("There were " + str(broken_syms) + " (skipped) broken symlinks in " + entry)
+                    broken_syms_count = self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
+                    if broken_syms_count:
+                        verb = 'was' if broken_syms_count == 1 else verb = 'were'
+                        printWarning("There " + verb + " " + str(broken_syms_count) + " (skipped) broken symlinks in " + entry)
                     archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
                     self.pop_broken_symlinks()
             elif bckentry['withpath'] == 'no':
