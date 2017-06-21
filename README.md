@@ -2,13 +2,16 @@
 
 License: GPLv3
 
-Copyright 2016, Balint Fekete
+Copyright 2017, Balint Fekete
 
 ## Feature list ##
 
-* backup sets separatable in unique files (passed as command line parameter)
+* only (optional) config parameter: backupset's config file 
+* backup sets are separatable in unique config files
 * unique backup entries in backup sets (up to 99)
 * global exclude lists (file, dir, filetype) for entire backup set
+* handling broken symlinks
+* create md5sum from archive file
 * every backup entry is customizable
     * enabled / disabled
     * archive file name
@@ -23,9 +26,6 @@ Copyright 2016, Balint Fekete
     * result dir
 
 ## Known issues ##
-* (tar/targz/tarbz2 compress method + follow symlink + broken symlink) combo causes unhandled exception 
-   ( http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken )
-
 * follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
  
 ## Basics ##
@@ -103,8 +103,6 @@ vi /my/path/mybackup.cfg   (customize)
 * comment file addition to archive (zip)
 
 * filelist file creation from archive - after compression
-
-* create md5sum from archive file
 
 * pre-calculate estimated file size → predict if free space will be enough or not
 
