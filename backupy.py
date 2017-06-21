@@ -118,6 +118,30 @@ def getsub_dir_path(root, longpath):
     return os.path.join(*temp)
 
 
+def filter_nonexistent_include_dirs(include_dirs):
+    remove_indexes = []
+    for index, dirpath in enumerate(include_dirs):
+        if not os.path.exists(dirpath):
+            remove_indexes.append(index)
+            printWarning("Include dir doesn't exist, skipping: %s" % str(dirpath))
+    if remove_indexes:
+        for index in remove_indexes:
+            del include_dirs[index]
+
+
+def check_if_file_is_unreadable(path):
+    return not os.access(path, os.R_OK)
+
+
+def get_unreadable_files_in_recursive_subdir(subdir):
+    lista = []
+    for root, dirs, files in os.walk(subdir):
+        for file in files:
+            if check_if_file_is_unreadable(os.path.join(root, file)):
+                lista.append(os.path.join(root, file))
+    return lista
+
+
 def create_config_file(config_file_path):
     # TODO: store config lines in a fix order
     # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
@@ -532,23 +556,25 @@ class Backupy:
         return os.path.islink(path) and not os.path.exists(path)
 
     def get_broken_syms_in_recursive_subdir(self, subdir):
-        lista = []
+        broken_list = []
         for root, dirs, files in os.walk(subdir):
             for file in files:
                 if self.check_if_symlink_broken(os.path.join(root, file)):
-                    lista.append(os.path.join(root, file))
-        if lista and not os.path.exists(self.path_stash):
-            try:
-                os.makedirs(name=self.path_stash, exist_ok=True)
-            except OSError as err:
-                printError("Cannot create stash temp dir for broken symlinks: %s" % self.path_stash)
-                printError("(%s)" % err.strerror)
-                sys.exit(1)
-            return lista
+                    broken_list.append(os.path.join(root, file))
+        if broken_list:
+            if not os.path.exists(self.path_stash):
+                try:
+                    os.makedirs(name=self.path_stash, exist_ok=True)
+                except OSError as err:
+                    printError("Cannot create stash temp dir for broken symlinks: %s" % self.path_stash)
+                    printError("(%s)" % err.strerror)
+                    sys.exit(1)
+            return broken_list
         return False
 
     def stash_broken_symlinks(self, syms):
         if syms and isinstance(syms, list):
+            printDebug("Stashing broken symlinks to %s" % self.path_stash)
             for sym in syms:
                 temp_target = os.path.join(self.path_stash, get_leaf_from_path(sym)) + '_' + get_random_string(7)
                 self.broken_syms[sym] = temp_target
@@ -563,6 +589,7 @@ class Backupy:
 
     def pop_broken_symlinks(self):
         if self.broken_syms:
+            printDebug("Popping broken symlinks from %s" % self.path_stash)
             for origin, temp_target in self.broken_syms.items():
                 try:
                     shutil.move(temp_target, origin)
@@ -643,9 +670,13 @@ class Backupy:
 
         printLog("--------------------------------------------------")
         if bckentry['enabled'].lower() != "yes":
-            printLog("Backup entry \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
+            printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % bckentry['name'])
             return False
         printLog("Executing backup task: \"" + colorblue + bckentry['name'] + colorreset + "\"")
+        filter_nonexistent_include_dirs(bckentry['include_dir'])
+        if not bckentry['include_dir']:
+            printWarning("Backup task \"%s\" include_dir pathes are all invalid --> SKIPPING" % bckentry['name'])
+            return False
         if os.path.isfile(filepath):
             printWarning("There is already an archive with this name:")
             printWarning("%s" % filepath)
@@ -803,7 +834,7 @@ class Backupy:
             mode = bckentry['method']
 
             if self.compress_pre(bckentry['result_dir'], bckentry):
-                print("%s Starting backup" % get_time())
+                printLog("Starting backup")
                 if mode == "tar" or mode == "targz" or mode == "tarbz2":
                     self.compress_tar(bckentry)
                 elif mode == "zip":
