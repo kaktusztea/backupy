@@ -50,7 +50,7 @@ __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
 
-debug = False
+debug = True
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
@@ -572,9 +572,9 @@ class Backupy:
             return broken_list
         return False
 
-    def stash_broken_symlinks(self, syms):
+    def stash_broken_symlinks(self, entry, syms):
         if syms and isinstance(syms, list):
-            printDebug("Stashing broken symlinks to %s" % self.path_stash)
+            printDebug("Stashing broken symlinks to %s for %s" % (self.path_stash, entry))
             for sym in syms:
                 temp_target = os.path.join(self.path_stash, get_leaf_from_path(sym)) + '_' + get_random_string(7)
                 self.broken_syms[sym] = temp_target
@@ -587,13 +587,14 @@ class Backupy:
                     printError("(%s)" % err.strerror)
             printDebug("Broken symlinks and their stash location pairs:")
             printDebug(self.broken_syms)
-            return len(syms)
-        else:
-            return False
+            if len(syms):
+                verb = 'was' if len(syms) == 1 else 'were'
+                printWarning("There " + verb + " " + str(len(syms)) + " (skipped) broken symlinks in " + entry)
+                self.list_broken_symlinks()
 
-    def pop_broken_symlinks(self):
+    def pop_broken_symlinks(self, entry):
         if self.broken_syms:
-            printDebug("Popping broken symlinks from %s" % self.path_stash)
+            printDebug("Popping broken symlinks from %s for %s" % (self.path_stash, entry))
             for origin, temp_target in self.broken_syms.items():
                 try:
                     shutil.move(temp_target, origin)
@@ -725,20 +726,16 @@ class Backupy:
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dir']:
                     if bckentry['followsym'] == 'yes':  # workaround for "tar + follow symlinks + broken symmlinks" use case
-                        broken_syms_count = self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
-                        if broken_syms_count:
-                            verb = 'was' if broken_syms_count == 1 else 'were'
-                            printWarning("There " + verb + " " + str(broken_syms_count) + " (skipped) broken symlinks in " + entry)
-                            self.list_broken_symlinks()
+                        self.stash_broken_symlinks(entry, self.get_broken_syms_in_recursive_subdir(entry))
                     archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
                     if bckentry['followsym'] == 'yes':
-                        self.pop_broken_symlinks()
+                        self.pop_broken_symlinks(entry)
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dir']:
-                    self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
+                    self.stash_broken_symlinks(entry, self.get_broken_syms_in_recursive_subdir(entry))
                     # http://stackoverflow.com/questions/39438335/python-how-could-i-access-tarfile-adds-name-parameter-in-adds-filter-me
                     archive.add(entry, arcname=os.path.basename(entry), filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
-                    self.pop_broken_symlinks()
+                    self.pop_broken_symlinks(entry)
             else:
                 printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
                 sys.exit(1)
@@ -760,7 +757,7 @@ class Backupy:
         finally:
             archive.close()
             self.store_md5(filepath)
-            self.pop_broken_symlinks()
+            self.pop_broken_symlinks(entry)
 
         filesize = os.path.getsize(filepath)
         printLog("Done [%s]" % sizeof_fmt(filesize))
