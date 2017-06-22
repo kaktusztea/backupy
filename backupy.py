@@ -602,6 +602,11 @@ class Backupy:
                     printError("(%s)" % err.strerror)
             self.broken_syms.clear()
 
+    def list_broken_symlinks(self):
+        if self.broken_syms:
+            for symlink in self.broken_syms.keys():
+                printWarning(symlink)
+
     def store_md5(self, filepath):
         self.path_md5[self.cfg_actual] = os.path.join(self.configs_user[self.cfg_actual]['result_dir'], "md5.sum")
         md5file = self.path_md5[self.cfg_actual]
@@ -719,12 +724,15 @@ class Backupy:
 
             if bckentry['withpath'] == 'yes':
                 for entry in bckentry['include_dir']:
-                    broken_syms_count = self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
-                    if broken_syms_count:
-                        verb = 'was' if broken_syms_count == 1 else verb = 'were'
-                        printWarning("There " + verb + " " + str(broken_syms_count) + " (skipped) broken symlinks in " + entry)
+                    if bckentry['followsym'] == 'yes':  # workaround for "tar + follow symlinks + broken symmlinks" use case
+                        broken_syms_count = self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
+                        if broken_syms_count:
+                            verb = 'was' if broken_syms_count == 1 else 'were'
+                            printWarning("There " + verb + " " + str(broken_syms_count) + " (skipped) broken symlinks in " + entry)
+                            self.list_broken_symlinks()
                     archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
-                    self.pop_broken_symlinks()
+                    if bckentry['followsym'] == 'yes':
+                        self.pop_broken_symlinks()
             elif bckentry['withpath'] == 'no':
                 for entry in bckentry['include_dir']:
                     self.stash_broken_symlinks(self.get_broken_syms_in_recursive_subdir(entry))
