@@ -1,4 +1,4 @@
-**backupy** is a handy backup tool written in python 3.4.
+**backupy** is a handy (compressed) backup tool written in python 3.4.
 
 License: GPLv3
 
@@ -6,13 +6,13 @@ Copyright 2017, Balint Fekete
 
 ## Feature list ##
 
-* only (optional) config parameter: backupset's config file 
 * backup sets are separatable in unique config files
-* unique backup entries in backup sets (up to 99)
+* unique backup tasks in backup sets (up to 99)
 * global exclude lists (file, dir, filetype) for entire backup set
-* handling broken symlinks
+* handling broken symlinks for "tar+follow syms+broken syms" use case
+* only (optional) config parameter: backupset's config file 
 * create md5sum from archive file
-* every backup entry is customizable
+* every backup task is customizable
     * enabled / disabled
     * archive file name
     * compression method (tar, targz, tarbz2, zip)
