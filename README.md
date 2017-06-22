@@ -25,9 +25,7 @@ Copyright 2017, Balint Fekete
     * exclude filetypes (special: '~'  →  mynovel.doc~ )
     * result dir
 
-## Known issues ##
-* follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
- 
+
 ## Basics ##
 
 ### Set up, get repo ###
@@ -77,7 +75,9 @@ vi /my/path/mybackup.cfg   (customize)
 ./backupy.py /my/path/mybackup.cfg
 
 ```
-
+## Known issues ##
+* follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
+ 
 ## Planned features ##
 * exclude / include unique files
 
