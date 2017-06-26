@@ -10,7 +10,7 @@ Copyright 2017, Balint Fekete
 * unique backup tasks in backup sets (up to 99)
 * global exclude lists (file, dir, filetype) for entire backup set
 * handling broken symlinks for "tar+follow syms+broken syms" use case
-* only (optional) config parameter: backupset's config file 
+* only (optional) command-line parameter: backupset's config file(s)
 * create md5sum from archive file
 * every backup task is customizable
     * enabled / disabled
@@ -24,6 +24,8 @@ Copyright 2017, Balint Fekete
     * exclude filenames
     * exclude filetypes (special: '~'  →  mynovel.doc~ )
     * result dir
+    * skip if permission fail
+    * skip if directory is non-existent
 
 
 ## Basics ##
