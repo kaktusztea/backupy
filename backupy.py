@@ -44,14 +44,14 @@ except ImportError:
 
 # Globals
 __author__ = 'Balint Fekete'
-__copyright__ = 'Copyright 2016, Balint Fekete'
+__copyright__ = 'Copyright 2017, Balint Fekete'
 __license__ = 'GPLv3'
 __version__ = '1.1.2'
 __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
 
-debug = True
+debug = False
 colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
