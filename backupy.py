@@ -46,7 +46,7 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2016, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '1.1.0'
+__version__ = '1.1.2'
 __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
@@ -56,6 +56,7 @@ colorred = '\033[1;31m'
 colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
 colorblue = '\033[1;2;34m'
+colorgreen = "\033[1;32m"
 
 
 def strip_dash_string_end(line):
@@ -159,21 +160,28 @@ def filter_nonexistent_include_dirs(include_dirs):
         if not os.path.exists(dirpath):
             remove_indexes.append(index)
             printWarning("Include dir doesn't exist, skipping: %s" % str(dirpath))
+    remove_indexes.sort(reverse=True)
     if remove_indexes:
         for index in remove_indexes:
             del include_dirs[index]
+        return True    # there was at least one unaccessable dir
 
 
 def check_if_file_is_unreadable(path):
     return not os.access(path, os.R_OK)
 
 
-def get_unreadable_files_in_recursive_subdir(subdir):
+def get_unreadable_files_in_recursive_subdir(subdir, followsym):
     lista = []
     for root, dirs, files in os.walk(subdir):
         for file in files:
-            if check_if_file_is_unreadable(os.path.join(root, file)):
-                lista.append(os.path.join(root, file))
+            ffile = os.path.join(root, file)
+            if followsym:
+                if check_if_file_is_unreadable(ffile):
+                    lista.append(os.path.join(root, file))
+            else:
+                if check_if_file_is_unreadable(ffile) and not os.path.islink(ffile):
+                    lista.append(os.path.join(root, file))
     return lista
 
 
@@ -225,7 +233,7 @@ def printWarning(log):
         printLog(coloryellow + log + colorreset)
     if isinstance(log, list):
         for line in log:
-            printLog(coloryellow + line + colorreset)
+            printLog(" " + coloryellow + line + colorreset)
 
 
 def printError(log):
@@ -235,6 +243,10 @@ def printError(log):
 def printDebug(log):
     if debug:
         printLog(coloryellow + str(log) + colorreset)
+
+
+def printOK(log):
+    printLog(colorgreen + str(log) + colorreset)
 
 
 def exit_config_error(config_file, section, comment, exitnow=True):
@@ -287,10 +299,7 @@ class Backupset:
             printError("Config file does not exists: %s" % config_file)
             sys.exit(1)
         self.config_file = config_file
-        self.cfg_actual = ''    # TODO: class-ification: is this needed?
         self.task_list = []
-        self.section_list = []  # TODO: is this needed?
-
         self.g = Configglobal()
         # get configs
         self.get_configs_global()
@@ -303,7 +312,7 @@ class Backupset:
         ll = [task for task in self.task_list if task.enabled]
         for task in ll:
             for task2 in ll:
-                if task.section != task2.section and task.archive_name == task2.archive_name and task.result_dir == task2.result_dir:
+                if task.section != task2.section and ((task.archive_name == task2.archive_name and task.path_result_dir == task2.path_result_dir) or task.name == task2.name):
                     return False
         return True
 
@@ -317,7 +326,7 @@ class Backupset:
         cfghandler = configparser.ConfigParser()
         try:
             cfghandler.read(self.config_file)
-            self.section_list = cfghandler.sections()
+            # self.section_list = cfghandler.sections()
 
             ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
             self.g.exclude_endings = list(map(str.strip, ll.split(',')))
@@ -347,7 +356,7 @@ class Backupset:
         try:
             cfghandler.read(self.config_file)
             pattern = re.compile("BACKUP[0-9]{1,2}$")
-            for section in self.section_list:
+            for section in cfghandler.sections():
                 if pattern.match(section):
                     task = Backuptask(section, self.g, self.config_file)
                     task.section = strip_hash(section)
@@ -361,6 +370,7 @@ class Backupset:
                     task.followsym = convert_to_bool(strip_hash(cfghandler.get(section, 'followsym', raw=False)))
                     task.withpath = convert_to_bool(strip_hash(cfghandler.get(section, 'withpath', raw=False)))
                     task.skip_if_permission_fail = convert_to_bool(strip_hash(cfghandler.get(section, 'skip_if_permission_fail', raw=False)))
+                    task.skip_if_directory_nonexistent = convert_to_bool(strip_hash(cfghandler.get(section, 'skip_if_directory_nonexistent', raw=False)))
 
                     i = 1
                     while 'include_dir'+str(i) in cfghandler[section]:
@@ -436,7 +446,7 @@ class Backupset:
                     del task
 
             if not self.check_archivename_unique():
-                exit_config_error(self.config_file, "General error", "'archive_name'+'result_dir' combo should be unique between enabled backup entries!")
+                exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup entries!")
 
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % self.config_file)
@@ -474,6 +484,7 @@ class Backuptask:
         self.followsym = False
         self.withpath = False
         self.skip_if_permission_fail = False
+        self.skip_if_directory_nonexistent = False
         self.include_dirs = []
         self.exclude_dir_fullpath = []
         self.exclude_dir_names = []
@@ -527,12 +538,14 @@ class Backuptask:
             self.check_mandatory(self.path_result_dir)
             self.check_mandatory(self.withpath)
             self.check_mandatory(self.skip_if_permission_fail)
+            self.check_mandatory(self.skip_if_directory_nonexistent)
             self.check_mandatory(self.include_dirs)
             self.check_mandatory(self.path_result_dir)
             self.check_yes_no(self.enabled, "enabled")
             self.check_yes_no(self.followsym, "followsym")
             self.check_yes_no(self.withpath, "withpath")
             self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
+            self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
         except Exception as err:
             exit_config_error(self.path_config_file, self.section, err, exitnow=True)  # TODO: err  is OK?
 
@@ -667,22 +680,36 @@ class Backuptask:
             printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % self.name)
             return False
         printLog("Executing backup task: \"" + colorblue + self.name + colorreset + "\"")
-        filter_nonexistent_include_dirs(self.include_dirs)
+        if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
+            printWarning("Skipping '" + self.name + "'")
+            return False
         if not self.include_dirs:
             printWarning("Backup task \"%s\" include_dir pathes are all invalid --> SKIPPING" % self.name)
             return False
         if os.path.isfile(self.archivefullpath):
             printWarning("There is already an archive with this name:")
             printWarning("%s" % self.archivefullpath)
-            printWarning("Skipping")
+            printWarning("Skipping '" + self.name + "'")
             return False
-        else:
-            if not os.path.isdir(self.path_result_dir):
-                comment = "Result directory does not exists: %s" % self.path_result_dir
-                exit_config_error(self.path_config_file, self.section, comment)
-            printLog("Creating archive: %s" % self.archivefullpath)
-            printLog("Compressing method: %s" % self.method)
-            printLog("Free space in target dir: %s" % get_dir_free_space(self.path_result_dir))
+        if self.skip_if_permission_fail:
+            printLog("Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: " + str(self.followsym) + ")")
+            exit_flag = False
+            for include_dir in self.include_dirs:
+                unreadable_files = get_unreadable_files_in_recursive_subdir(include_dir, self.followsym)
+                if unreadable_files:
+                    printWarning("Ureadeable files in " + include_dir + ":")
+                    printWarning(unreadable_files)
+                    exit_flag = True
+            if exit_flag:
+                printWarning("Skipping '" + self.name + "'")
+                return False
+
+        if not os.path.isdir(self.path_result_dir):
+            comment = "Result directory does not exists: %s" % self.path_result_dir
+            exit_config_error(self.path_config_file, self.section, comment)
+        printLog("Creating archive: %s" % self.archivefullpath)
+        printLog("Compressing method: %s" % self.method)
+        printLog("Free space in target dir: %s" % get_dir_free_space(self.path_result_dir))
         return True
 
     def compress_tar(self):
@@ -742,7 +769,7 @@ class Backuptask:
             self.pop_broken_symlinks()
 
         filesize = os.path.getsize(self.archivefullpath)
-        printLog("Done [%s]" % sizeof_fmt(filesize))
+        printOK("Done [%s]" % sizeof_fmt(filesize))
 
     def compress_zip(self):
         """ Compressing with zip method """
@@ -803,12 +830,13 @@ class Backuptask:
             archive.close()
             self.store_md5(self.archivefullpath)
         filesize = os.path.getsize(self.archivefullpath)
-        printLog("Done [%s]" % sizeof_fmt(filesize))
+        printOK("Done [%s]" % sizeof_fmt(filesize))
 
 
 class Backupy:
     """ Backupy class """
     def __init__(self):
+        self.validate = False
         self.path_home = os.path.expanduser("~")
         self.path_default_configdir = os.path.join(self.path_home, '.config/backupy')
         self.path_default_config_file = os.path.join(self.path_default_configdir, 'default.cfg')
@@ -817,6 +845,9 @@ class Backupy:
             if sys.argv[1] == "--help":
                 self.help()
                 sys.exit(0)
+            # if sys.argv[1] == "--validate":  # TODO: validate
+            #     self.validate = True
+            #     sys.exit(0)
             if not os.path.exists(sys.argv[1]):
                 printLog("Config file does not exists: %s" % sys.argv[1])
                 sys.exit(1)
@@ -859,6 +890,8 @@ class Backupy:
               "  *method = targz                       # Compression method {tar, targz, tarbz2, zip}\n"
               "  *followsym = yes                      # Should compressor follow symlinks\n"
               "  *withpath = no                        # compress files with or without full path\n"
+              "  *skip_if_permission_fail = no         # skips backup task if there is/are file(s) with no access by running user\n"
+              "  *skip_if_directory_nonexistent = no   # skips backup task if there is/are non-existent include_dir\n"
               "  *include_dir1 = /home/joe/humour      # included directory 1. (at least one is mandatory)\n"
               "   include_dir2 = /home/joe/novels      # included directory 2.\n"
               "   inlcude_dirN = ... \n"
@@ -896,6 +929,7 @@ class Backupy:
                                              'followsym': 'yes',
                                              'withpath': 'no',
                                              'skip_if_permission_fail': 'no',
+                                             'skip_if_directory_nonexistent': 'no',
                                              'include_dir1': '/home/joe/humour                # at least one is mandatory',
                                              'include_dir2': '/home/joe/novels',
                                              'exclude_dir_names': 'garbage, temp',
