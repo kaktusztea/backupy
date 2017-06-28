@@ -336,9 +336,9 @@ class Backupset:
             cfghandler.read(self.config_file)
             self.name = strip_hash(cfghandler.get("META", 'name', raw=False))
             self.description = strip_hash(cfghandler.get("META", 'description', raw=False))
-            self.enabled= convert_to_bool(strip_hash(cfghandler.get("META", 'enabled', raw=False)))
+            self.enabled = convert_to_bool(strip_hash(cfghandler.get("META", 'enabled', raw=False)))
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
-            printError("Invalid config file: %s" % self.config_file)
+            printError("Backup set config file is invalid: %s" % self.config_file)
             printError("%s" % err.message)
             sys.exit(1)
 
@@ -543,29 +543,26 @@ class Backuptask:
             raise Exception("'%s' is mandatory!" % option)
 
     def check_yes_no(self, option, name):
-        if option == "-1":
-            raise Exception("%s should be: {yes, no} (%s)" % (name, self.name))
+        if option == -1:
+            exit_config_error(self.path_config_file, self.section, "'%s' should be {yes, no}" % name, exitnow=True)
 
     def check_mandatory_options(self):
-        try:
-            self.check_mandatory(self.enabled)
-            self.check_mandatory(self.name)
-            self.check_mandatory(self.archive_name)
-            self.check_mandatory(self.method)
-            self.check_mandatory(self.followsym)
-            self.check_mandatory(self.path_result_dir)
-            self.check_mandatory(self.withpath)
-            self.check_mandatory(self.skip_if_permission_fail)
-            self.check_mandatory(self.skip_if_directory_nonexistent)
-            self.check_mandatory(self.include_dirs)
-            self.check_mandatory(self.path_result_dir)
-            self.check_yes_no(self.enabled, "enabled")
-            self.check_yes_no(self.followsym, "followsym")
-            self.check_yes_no(self.withpath, "withpath")
-            self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
-            self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
-        except Exception as err:
-            exit_config_error(self.path_config_file, self.section, err, exitnow=True)  # TODO: err  is OK?
+        self.check_mandatory(self.enabled)
+        self.check_mandatory(self.name)
+        self.check_mandatory(self.archive_name)
+        self.check_mandatory(self.method)
+        self.check_mandatory(self.followsym)
+        self.check_mandatory(self.path_result_dir)
+        self.check_mandatory(self.withpath)
+        self.check_mandatory(self.skip_if_permission_fail)
+        self.check_mandatory(self.skip_if_directory_nonexistent)
+        self.check_mandatory(self.include_dirs)
+        self.check_mandatory(self.path_result_dir)
+        self.check_yes_no(self.enabled, "enabled")
+        self.check_yes_no(self.followsym, "followsym")
+        self.check_yes_no(self.withpath, "withpath")
+        self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
+        self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
 
     def check_include_dir_dups(self):
         return len(self.include_dirs) == len(set(self.include_dirs))
@@ -747,7 +744,6 @@ class Backuptask:
                 exit_config_error(self.path_config_file, self.section, comment)  # TODO: class-ification
 
             # http://stackoverflow.com/a/39321142/4325232
-            # dereference = True if self.followsym else False      # TODO: remove if it does not needed
             archive = tarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
 
             if self.withpath:
@@ -898,13 +894,19 @@ class Backupy:
     def show_manual(self):
         print("backupy v" + __version__ + "\n\n"
               "Start methods\n"
-              "   ./backupy.py                      # a.) at first run, generates default backup set config file\n"
-              "                                     # b.) if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
-              "   ./backupy.py /foo/mybackup.cfg    # starts with custom backup set config file\n"
-              "   ./backupy.py --help               # this help\n\n"
+              "   ./backupy.py                       # a.) at first run, generates default backup set config file\n"
+              "                                      # b.) if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
+              "   ./backupy.py -s /foo/mybackup.cfg  # starts with custom backup set config file\n"
+              "   ./backupy.py -s /foo/mybackup.cfg /bar/mysecond.cfg /boo/mythird.cfg\n"
+              "                                      # starts with 3 config files for 3 different backup sets\n"
+              "   ./backupy.py --validate -s /foo/mybackup.cfg /bar/mysecond.cfg\n"
+              "                                      # only validates config files, doesn't execute backup sets\n"
+              "   ./backupy.py --manual              # this short manual\n\n"
               "Summary:\n"
               "   - backupy handles backup sets - represented by .cfg files\n"
-              "   - every backups set is built up from backup tasks [BACKUPx] sections below\n\n"
+              "   - every backups set is built up from backup tasks [BACKUPx] sections below\n"
+              "   - you can enable/disable backup sets and backups tasks below them by 'enabled' parameter in config file \n"
+              "   - \n"
               "Example for config file\n"
               "   [META]\n"
               "   name = My backup set                 # name of the backup set represented by this config file\n"
@@ -950,9 +952,9 @@ class Backupy:
         # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
         filehandler = ""
         cfghandler = configparser.ConfigParser()
-        cfghandler['META'] = {'name': 'My backup set',          # name of the backup set represented by this config file
+        cfghandler['META'] = {'name': 'My backup set',
                               'description': 'Free text about this backup set, its purpose, etc.',
-                              'enabled': 'yes'}         # is this backup set enabled (or skipped)"
+                              'enabled': 'yes'}
 
         cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
                                          'exclude_files': 'Thumbs.db, abcdefgh.txt',
