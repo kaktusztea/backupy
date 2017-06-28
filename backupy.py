@@ -35,6 +35,7 @@ import tarfile
 import zipfile
 import datetime
 import platform
+import argparse
 import configparser
 try:
     import zlib
@@ -57,6 +58,7 @@ colorreset = '\033[0m'
 coloryellow = '\033[0;93m'
 colorblue = '\033[1;2;34m'
 colorgreen = "\033[1;32m"
+colorbold = "\033[1m"
 
 
 def strip_dash_string_end(line):
@@ -299,11 +301,16 @@ class Backupset:
             printError("Config file does not exists: %s" % config_file)
             sys.exit(1)
         self.config_file = config_file
+        self.name = ""
+        self.description = ""
+        self.enabled = False
         self.task_list = []
         self.g = Configglobal()
         # get configs
+        self.get_configs_meta()
         self.get_configs_global()
-        self.get_configs_task()
+        self.get_configs_tasks()
+        printLog("Backup set (%s) config file is valid: %s" % (self.name, self.config_file))
 
     def __del__(self):
         pass
@@ -321,6 +328,19 @@ class Backupset:
             if task.enabled:
                 return True
         return False
+
+    def get_configs_meta(self):
+        cfghandler = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+        cfghandler.optionxform = str
+        try:
+            cfghandler.read(self.config_file)
+            self.name = strip_hash(cfghandler.get("META", 'name', raw=False))
+            self.description = strip_hash(cfghandler.get("META", 'description', raw=False))
+            self.enabled= convert_to_bool(strip_hash(cfghandler.get("META", 'enabled', raw=False)))
+        except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
+            printError("Invalid config file: %s" % self.config_file)
+            printError("%s" % err.message)
+            sys.exit(1)
 
     def get_configs_global(self):
         cfghandler = configparser.ConfigParser()
@@ -350,7 +370,7 @@ class Backupset:
             printError("%s (%s)" % (oerr.strerror, str(oerr.errno)))
             sys.exit(1)
 
-    def get_configs_task(self):
+    def get_configs_tasks(self):
         cfghandler = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         cfghandler.optionxform = str
         try:
@@ -452,8 +472,6 @@ class Backupset:
             printError("Invalid config file: %s" % self.config_file)
             printError("%s" % err.message)
             sys.exit(1)
-        else:
-            printLog("Config file is valid: %s" % self.config_file)
 
     def execute(self):
         if not self.has_active_backuptask():
@@ -835,58 +853,73 @@ class Backuptask:
 
 class Backupy:
     """ Backupy class """
-    def __init__(self):
+    def __init__(self, pargs):
         self.validate = False
         self.path_home = os.path.expanduser("~")
         self.path_default_configdir = os.path.join(self.path_home, '.config/backupy')
         self.path_default_config_file = os.path.join(self.path_default_configdir, 'default.cfg')
+        self.backupset_list = []
+        self.path_config_files = []
 
-        if len(sys.argv) == 2:
-            if sys.argv[1] == "--help":
-                self.help()
-                sys.exit(0)
-            # if sys.argv[1] == "--validate":  # TODO: validate
-            #     self.validate = True
-            #     sys.exit(0)
-            if not os.path.exists(sys.argv[1]):
-                printLog("Config file does not exists: %s" % sys.argv[1])
-                sys.exit(1)
-            else:
-                self.path_configdir = os.path.dirname(os.path.abspath(sys.argv[1]))
-                self.path_config_file = os.path.abspath(sys.argv[1])
-        elif len(sys.argv) > 2:
-            self.help()
-            sys.exit(1)
-        else:
-            self.path_configdir = self.path_default_configdir
-            self.path_config_file = self.path_default_config_file
+        argparser = argparse.ArgumentParser(prog='backupy')
+        argparser.add_argument('--manual', action='store_true', help='Shows backupy short manual')
+        argparser.add_argument('--validate', action='store_true', help='Validate config files only, no execution')
+        argparser.add_argument('-s', '--backupsets', nargs='+', help='List of backupset ')
+
+        args = argparser.parse_args(pargs)
+        self.path_config_files = args.backupsets
+        self.validate = args.validate
+
+        if args.manual:
+            self.show_manual()
+            sys.exit(0)
 
         printLog("backupy v" + __version__ + " starting")
         if debug:
             printWarning("DEBUG MODE ENABLED")
-        self.backupset_list = []
-        self.backupset_list.append(Backupset(self.path_config_file))
+        if self.validate:
+            printWarning("VALIDATE MODE: only config check, no execution!")
+
+        if not self.path_config_files:
+            self.path_config_files = []
+            self.path_config_files.append(self.path_default_config_file)
+            self.check_first_run()
+
+        for path in self.path_config_files:
+            self.backupset_list.append(Backupset(os.path.abspath(path)))
+
+        if self.validate:
+            printOK("All config files are all valid. Wo-hoooo!")
+            sys.exit(0)
 
     def __del__(self):
         pass
 
-    def help(self):
+    def show_manual(self):
         print("backupy v" + __version__ + "\n\n"
               "Start methods\n"
-              "   ./backupy.py                      # at first run, generates default backup set config file\n"
-              "                                     # if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
+              "   ./backupy.py                      # a.) at first run, generates default backup set config file\n"
+              "                                     # b.) if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
               "   ./backupy.py /foo/mybackup.cfg    # starts with custom backup set config file\n"
               "   ./backupy.py --help               # this help\n\n"
+              "Summary:\n"
+              "   - backupy handles backup sets - represented by .cfg files\n"
+              "   - every backups set is built up from backup tasks [BACKUPx] sections below\n\n"
               "Example for config file\n"
-              "   [GLOBAL_EXCLUDES]                    # you can change options' values, but don't modify section name and option names!\n"
+              "   [META]\n"
+              "   name = My backup set                 # name of the backup set represented by this config file\n"
+              "   description = For relaxed days :)    # Free text about this backup set, its purpose, etc.\n"
+              "   enabled = yes                        # is this backup set enabled (or skipped)\n\n"
+              "   [GLOBAL_EXCLUDES]                    # excludes that apply to all [BACKUPx] tasks\n"
+              "                                          you can change options' values, but don't modify section name and option names!\n"
               "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
               "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
               "   exclude_dir_names = trash, garbage   # list of globally excluded directory names without path\n\n"
               "   [BACKUP1]                            # Mandatory name pattern: BACKUP[1-99] (99 max) ; don't write anything after the number\n"
-              "  *name = My Document backup            # write entry name here\n"
+              "  *name = My Document backup            # write backup task name here\n"
               "  *enabled = yes                        # is this backup active. {yes, no}\n"
               "  *archive_name = document_backup       # archive file name without extension\n"
-              "  *path_result_dir = /home/joe/mybackups     # Where to create the archive file\n"
+              "  *path_result_dir = /home/joe/backup   # Where to create the archive file\n"
               "  *method = targz                       # Compression method {tar, targz, tarbz2, zip}\n"
               "  *followsym = yes                      # Should compressor follow symlinks\n"
               "  *withpath = no                        # compress files with or without full path\n"
@@ -904,7 +937,7 @@ class Backupy:
               "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
               "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
               "   * Mandatory options\n\n"
-              "Tip 1: Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!\n"
+              "Tip 1: Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n"
               "Tip 2: use of comment sign '#' is allowed - at the end of option lines\n"
               "Tip 3: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
               "Tip 4: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
@@ -917,6 +950,10 @@ class Backupy:
         # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
         filehandler = ""
         cfghandler = configparser.ConfigParser()
+        cfghandler['META'] = {'name': 'My backup set',          # name of the backup set represented by this config file
+                              'description': 'Free text about this backup set, its purpose, etc.',
+                              'enabled': 'yes'}         # is this backup set enabled (or skipped)"
+
         cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
                                          'exclude_files': 'Thumbs.db, abcdefgh.txt',
                                          'exclude_dir_names': 'my_globaly_exclude_dir'}
@@ -964,23 +1001,25 @@ class Backupy:
             printLog("---------------------------------------------------------------")
             printLog("Now you can create user specified backup entries in %s" % self.path_default_config_file)
             printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
-            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup entry to be active!\n")
+            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n")
             printWarning("backupy.py --help is your friend.\n")
             sys.exit(0)
 
     def execute_backupsets(self):
         for backupset in self.backupset_list:
+            printLog("==================================================")
+            printLog(colorblue + "Executing backup set: %s%s " % (backupset.name, colorreset))
+            printLog("==================================================")
             backupset.execute()
         printLog("--------------------------------------------------")
-        printLog("backupy finished")
+        printOK("backupy finished")
 
 
-def main():
+def main(args):
     check_python_version()
-    backupy = Backupy()
-    backupy.check_first_run()
+    backupy = Backupy(args)
     backupy.execute_backupsets()
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
