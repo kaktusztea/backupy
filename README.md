@@ -7,10 +7,11 @@ Copyright 2017, Balint Fekete
 ## Feature list ##
 
 * backup sets are separatable in unique config files
+* multiple config files as parameters - able to execute them in one batch (in sequence)
 * unique backup tasks in backup sets (up to 99)
 * global exclude lists (file, dir, filetype) for entire backup set
 * handling broken symlinks for "tar+follow syms+broken syms" use case
-* only (optional) command-line parameter: backupset's config file(s)
+* validate mode: only config file validation, no execution
 * create md5sum from archive file
 * every backup task is customizable
     * enabled / disabled
@@ -18,14 +19,14 @@ Copyright 2017, Balint Fekete
     * compression method (tar, targz, tarbz2, zip)
     * store files/directories with/without full path
     * follow symlinks (yes/no)
-    * include directories
+    * include directories (multiple entries)
     * exclude directory names
     * exclude directory with fullpath
     * exclude filenames
     * exclude filetypes (special: '~'  →  mynovel.doc~ )
     * result dir
-    * skip if permission fail
-    * skip if directory is non-existent
+    * skip task if permission fail
+    * skip task if directory is non-existent
 
 
 ## Basics ##
