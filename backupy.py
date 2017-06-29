@@ -54,18 +54,10 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2017, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '1.1.2'
+__version__ = '1.1.5'
 __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
-
-debug = False
-colorred = '\033[1;31m'
-colorreset = '\033[0m'
-coloryellow = '\033[0;93m'
-colorblue = '\033[1;2;34m'
-colorgreen = "\033[1;32m"
-colorbold = "\033[1m"
 
 
 def strip_dash_string_end(line):
@@ -103,8 +95,6 @@ def strip_hash_on_dict_values(mydict):
     for idx, mylist in mydict.items():
         if isinstance(mylist, list):
             strip_hash_on_list_values(mylist)
-            # for lidx, elem in enumerate(mylist):
-            #     mydict[idx][lidx] = strip_hash_string_end(elem)
         elif isinstance(mylist, str):
             mydict[idx] = strip_hash_string_end(mylist)
         else:
@@ -239,23 +229,23 @@ def printLog(log):
 
 def printWarning(log):
     if isinstance(log, str):
-        printLog(coloryellow + log + colorreset)
+        printLog(Colors.coloryellow + log + Colors.colorreset)
     if isinstance(log, list):
         for line in log:
-            printLog(" " + coloryellow + line + colorreset)
+            printLog(" " + Colors.coloryellow + line + Colors.colorreset)
 
 
 def printError(log):
-    printLog(colorred + str(log) + colorreset)
+    printLog(Colors.colorred + str(log) + Colors.colorreset)
 
 
 def printDebug(log):
-    if debug:
-        printLog(coloryellow + str(log) + colorreset)
+    if Backupy.debug:
+        printLog(Colors.coloryellow + str(log) + Colors.colorreset)
 
 
 def printOK(log):
-    printLog(colorgreen + str(log) + colorreset)
+    printLog(Colors.colorgreen + str(log) + Colors.colorreset)
 
 
 def exit_config_error(config_file, section, comment, exitnow=True):
@@ -293,6 +283,15 @@ def get_dir_free_space(dirname):
     """ returns directory's free space in human readable format """
     st = os.statvfs(dirname)
     return sizeof_fmt(st.f_bavail * st.f_frsize)
+
+
+class Colors:
+    colorred = '\033[1;31m'
+    colorreset = '\033[0m'
+    coloryellow = '\033[0;93m'
+    colorblue = '\033[1;2;34m'
+    colorgreen = "\033[1;32m"
+    colorbold = "\033[1m"
 
 
 class Configglobal:
@@ -466,7 +465,7 @@ class Backupset:
 
                     # checks
                     task.check_mandatory_options()
-                    if not task.check_include_dir_dups():
+                    if not task.check_include_dir_dups:
                         exit_config_error(self.config_file, section, "'include_dirN' duplicates are not allowed.")
 
                     self.task_list.append(task)
@@ -571,6 +570,7 @@ class Backuptask:
         self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
         self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
 
+    @property
     def check_include_dir_dups(self):
         return len(self.include_dirs) == len(set(self.include_dirs))
 
@@ -587,7 +587,7 @@ class Backuptask:
         if broken_list:
             if not os.path.exists(self.path_stash):
                 try:
-                    os.makedirs(name=self.path_stash, exist_ok=True)
+                    os.makedirs(name=self.path_stash, mode=0o770, exist_ok=True)
                 except OSError as err:
                     printError("Cannot create stash temp dir for broken symlinks: %s" % self.path_stash)
                     printError("(%s)" % err.strerror)
@@ -701,7 +701,7 @@ class Backuptask:
         if not self.enabled:
             printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % self.name)
             return False
-        printLog("Executing backup task: \"" + colorblue + self.name + colorreset + "\"")
+        printLog("Executing backup task: \"" + Colors.colorblue + self.name + Colors.colorreset + "\"")
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
             printWarning("Skipping '" + self.name + "'")
             return False
@@ -856,6 +856,8 @@ class Backuptask:
 
 class Backupy:
     """ Backupy class """
+    debug = False
+
     def __init__(self, pargs):
         self.validate = False
         self.path_home = os.path.expanduser("~")
@@ -865,21 +867,23 @@ class Backupy:
         self.path_config_files = []
 
         argparser = argparse.ArgumentParser(prog='backupy')
-        argparser.add_argument('--manual', action='store_true', help='Shows backupy short manual')
-        argparser.add_argument('--validate', action='store_true', help='Validate config files only, no execution')
-        argparser.add_argument('-s', '--backupsets', nargs='+', help='List of backupset ')
+        argparser.add_argument('--manual', action='store_true', help='show backupy short manual')
+        argparser.add_argument('--debug', action='store_true', help='run backupy in debug mode')
+        argparser.add_argument('--validate', action='store_true', help='validate config files only, do not execute')
+        argparser.add_argument('-s', '--backupsets', nargs='+', help='list of (backupset) config file pathes')
 
         args = argparser.parse_args(pargs)
         self.path_config_files = args.backupsets
         self.validate = args.validate
+        Backupy.debug = args.debug
 
         if args.manual:
             self.show_manual()
             sys.exit(0)
 
         printLog("backupy v" + __version__ + " starting")
-        if debug:
-            printWarning("DEBUG MODE ENABLED")
+        if Backupy.debug:
+            printWarning("DEBUG MODE")
         if self.validate:
             printWarning("VALIDATE MODE: only config check, no execution!")
 
@@ -892,7 +896,7 @@ class Backupy:
             self.backupset_list.append(Backupset(os.path.abspath(path)))
 
         if self.validate:
-            printOK("All config files are all valid. Wo-hoooo!")
+            printOK("All config files are valid. Wo-hoooo!")
             sys.exit(0)
 
     def __del__(self):
@@ -1017,7 +1021,7 @@ class Backupy:
     def execute_backupsets(self):
         for backupset in self.backupset_list:
             printLog("==================================================")
-            printLog(colorblue + "Executing backup set: %s%s " % (backupset.name, colorreset))
+            printLog(Colors.colorblue + "Executing backup set: %s%s " % (backupset.name, Colors.colorreset))
             printLog("==================================================")
             backupset.execute()
         printLog("--------------------------------------------------")
