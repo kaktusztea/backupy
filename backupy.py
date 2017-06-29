@@ -4,21 +4,28 @@
     backupy: a handly tool for selectively backup your data
 
     Features:
-    * backup sets separatable in unique files (passed as command line parameter)
-    * unique backup entries in backup sets (up to 99)
+
+    * backup sets are separatable in unique config files
+    * multiple config files as parameters - able to execute them in one batch (in sequence)
+    * unique backup tasks in backup sets (up to 99)
     * global exclude lists (file, dir, filetype) for entire backup set
-    * every backup entry is customizable
+    * handling broken symlinks for "tar+follow syms+broken syms" use case
+    * validate mode: only config file validation, no execution
+    * create md5sum from archive file
+    * every backup task is customizable
         * enabled / disabled
         * archive file name
         * compression method (tar, targz, tarbz2, zip)
         * store files/directories with/without full path
         * follow symlinks (yes/no)
-        * include directories
+        * include directories (multiple entries)
         * exclude directory names
         * exclude directory with fullpath
         * exclude filenames
-        * exclude filetypes (special: '~' ==> mynovel.doc~ )
+        * exclude filetypes (special: '~' → mynovel.doc~ )
         * result dir
+        * skip task if permission fail
+        * skip task if directory is non-existent
 """
 
 import re
