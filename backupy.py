@@ -473,7 +473,7 @@ class Backupset:
                     del task
 
             if not self.check_archivename_unique():
-                exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup entries!")
+                exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
         except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
             printError("Invalid config file: %s" % self.config_file)
@@ -1026,10 +1026,11 @@ class Backupy:
             printLog("Generating default config file: %s" % self.path_default_config_file)
             self.create_config_file()
             printLog(Backupy.simple_line)
-            printLog("Now you can create user specified backup entries in %s" % self.path_default_config_file)
+            printLog("Now you can create user specified backup tasks in %s" % self.path_default_config_file)
             printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
             printLog("Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n")
-            printWarning("backupy.py --help is your friend.\n")
+            printWarning("Use 'backupy.py --help' for parameter help.")
+            printWarning("Use 'backupy.py --manual' to show How-to page.\n")
             sys.exit(0)
 
     def execute_backupsets(self):
