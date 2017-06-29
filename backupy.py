@@ -32,6 +32,7 @@ import re
 import os
 import sys
 import csv
+import time
 import errno
 import shutil
 import ntpath
@@ -222,8 +223,8 @@ def get_random_string(length):
     return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
 
 
-def printLog(log):
-    pp = get_time() + " " + str(log)
+def printLog(log, pre_empty_lines=0):
+    pp = "\n" * pre_empty_lines + get_time() + " " + str(log)
     print(pp)
 
 
@@ -316,7 +317,7 @@ class Backupset:
         self.get_configs_meta()
         self.get_configs_global()
         self.get_configs_tasks()
-        printLog("Backup set (%s) config file is valid: %s" % (self.name, self.config_file))
+        printLog("Backup set config file is valid (%s): %s" % (self.name, self.config_file))
 
     def __del__(self):
         pass
@@ -480,19 +481,24 @@ class Backupset:
             sys.exit(1)
 
     def execute(self):
+        if not self.enabled:
+            printLog("Backup set \"%s\" is DISABLED --> SKIPPING" % self.name)
+            printLog(Backupy.double_line)
+            return False
         if not self.has_active_backuptask():
-            printLog("---------------------------------------------------------------")
+            printLog(Backupy.simple_line)
             printLog("You don't have any active backup task entries in %s" % self.config_file)
             printLog("Exiting.")
             return False
         for task in self.task_list:
-            if task.enabled and task.compress_pre():
+            if task.compress_pre():
                 if task.method == "tar" or task.method == "targz" or task.method == "tarbz2":
                     task.compress_tar()
                 elif task.method == "zip":
                     task.compress_zip()
                 else:
                     printLog("Wrong method type in %s." % task.name)
+        printLog(Backupy.double_line)
 
 
 class Backuptask:
@@ -697,7 +703,7 @@ class Backuptask:
 
     def compress_pre(self):
         """" Checks and prints backup entry processing """
-        printLog("--------------------------------------------------")
+        printLog(Backupy.simple_line)
         if not self.enabled:
             printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % self.name)
             return False
@@ -857,8 +863,11 @@ class Backuptask:
 class Backupy:
     """ Backupy class """
     debug = False
+    simple_line = "-----------------------------------------------------------"
+    double_line = "==========================================================="
 
     def __init__(self, pargs):
+        self.start_time = time.time()
         self.validate = False
         self.path_home = os.path.expanduser("~")
         self.path_default_configdir = os.path.join(self.path_home, '.config/backupy')
@@ -958,6 +967,11 @@ class Backupy:
             printWarning("You did not run backupy init yet.")
             printWarning("Just run ./backupy.py and let it create default config for you.\n")
 
+    def print_elapsed_time(self):
+        hours, rem = divmod(time.time() - self.start_time, 3600)
+        minutes, seconds = divmod(rem, 60)
+        printLog("Elapsed time: {:0>2}:{:0>2}:{:02.0f}".format(int(hours), int(minutes), seconds), 1)
+
     def create_config_file(self):
         # TODO: store config lines in a fix order
         # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
@@ -1011,7 +1025,7 @@ class Backupy:
             printLog("First run!")
             printLog("Generating default config file: %s" % self.path_default_config_file)
             self.create_config_file()
-            printLog("---------------------------------------------------------------")
+            printLog(Backupy.simple_line)
             printLog("Now you can create user specified backup entries in %s" % self.path_default_config_file)
             printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
             printLog("Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n")
@@ -1020,11 +1034,11 @@ class Backupy:
 
     def execute_backupsets(self):
         for backupset in self.backupset_list:
-            printLog("==================================================")
+            printLog(Backupy.double_line, 2)
             printLog(Colors.colorblue + "Executing backup set: %s%s " % (backupset.name, Colors.colorreset))
-            printLog("==================================================")
+            printLog(Backupy.double_line)
             backupset.execute()
-        printLog("--------------------------------------------------")
+        self.print_elapsed_time()
         printOK("backupy finished")
 
 
