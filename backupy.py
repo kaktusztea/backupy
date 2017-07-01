@@ -642,11 +642,19 @@ class Backuptask:
         if not os.path.exists(filepath):
             return False
 
-        h = hashlib.md5(open(filepath, 'rb').read())
-        hashh = h.hexdigest()
+        # generate hash
+        printLog("Generating hash")
+        hash_value = hashlib.md5()
+        with open(filepath, "rb") as hash_handler:
+            for chunk in iter(lambda: hash_handler.read(2 ** 20), b''):
+                hash_value.update(chunk)
+        hash_result = hash_value.hexdigest()
+        printLog(hash_result)
+
+        # write hash to csv file: hash, filesize, filename
         myfile = open(self.path_md5, 'a')
         wr = csv.writer(myfile, delimiter=";")
-        wr.writerow([hashh, get_leaf_from_path(filepath)])
+        wr.writerow([hash_result, os.path.getsize(filepath), get_leaf_from_path(filepath)])
         myfile.close()
 
     def filter_general(self, item, root_dir=''):
@@ -792,9 +800,9 @@ class Backuptask:
                 sys.exit(99)
         finally:
             archive.close()
-            self.store_md5(self.archivefullpath)
             self.pop_broken_symlinks()
 
+        self.store_md5(self.archivefullpath)
         filesize = os.path.getsize(self.archivefullpath)
         printOK("Done [%s]" % sizeof_fmt(filesize))
 
