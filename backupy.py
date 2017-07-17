@@ -302,6 +302,65 @@ class Configglobal:
         self.exclude_dir_names = []
 
 
+class BackupyTarfile(tarfile.TarFile):
+    """ Override default built-in python tarfile library's add method
+        to handle permission read errors and be able to skip intead of
+        immediate exception.
+    """
+    def add(self, name, arcname=None, recursive=True, exclude=None, *, filter=None):
+        self._check("aw")
+
+        if arcname is None:
+            arcname = name
+
+        # Exclude pathnames.
+        if exclude is not None:
+            import warnings
+            warnings.warn("use the filter argument instead", DeprecationWarning, 2)
+            if exclude(name):
+                self._dbg(2, "tarfile: Excluded %r" % name)
+                return
+
+        # Skip if somebody tries to archive the archive...
+        if self.name is not None and os.path.abspath(name) == self.name:
+            self._dbg(2, "tarfile: Skipped %r" % name)
+            return
+
+        self._dbg(1, name)
+
+        # Create a TarInfo object from the file.
+        tarinfo = self.gettarinfo(name, arcname)
+
+        if tarinfo is None:
+            self._dbg(1, "tarfile: Unsupported type %r" % name)
+            return
+
+        # Change or exclude the TarInfo object.
+        if filter is not None:
+            tarinfo = filter(tarinfo)
+            if tarinfo is None:
+                self._dbg(2, "tarfile: Excluded %r" % name)
+                return
+
+        # Append the tar header and data to the archive.
+        if tarinfo.isreg():
+            try:
+                with open(name, "rb") as f:
+                    self.addfile(tarinfo, f)
+            except PermissionError as err:
+                printWarning("Skip file (permission error): %s" % name)
+                return
+
+        elif tarinfo.isdir():
+            self.addfile(tarinfo)
+            if recursive:
+                for f in os.listdir(name):
+                    self.add(os.path.join(name, f), os.path.join(arcname, f), recursive, exclude, filter=filter)
+
+        else:
+            self.addfile(tarinfo)
+
+
 class Backupset:
     def __init__(self, config_file):
         if not os.path.exists(config_file):
@@ -765,7 +824,7 @@ class Backuptask:
                 exit_config_error(self.path_config_file, self.section, comment)  # TODO: class-ification
 
             # http://stackoverflow.com/a/39321142/4325232
-            archive = tarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
+            archive = BackupyTarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
 
             if self.withpath:
                 for entry in self.include_dirs:
