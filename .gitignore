@@ -5,4 +5,5 @@ __pycache__/
 bak
 save
 .idea
+@eaDir
 test.py

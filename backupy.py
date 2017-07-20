@@ -354,9 +354,13 @@ class BackupyTarfile(tarfile.TarFile):
         elif tarinfo.isdir():
             self.addfile(tarinfo)
             if recursive:
-                for f in os.listdir(name):
-                    self.add(os.path.join(name, f), os.path.join(arcname, f), recursive, exclude, filter=filter)
-
+                try:
+                    # TODO: if it was the only dir included, then we shouldn't continue, just skip
+                    for f in os.listdir(name):
+                        self.add(os.path.join(name, f), os.path.join(arcname, f), recursive, exclude, filter=filter)
+                except PermissionError as err:
+                    printWarning("Skip directory (permission error): %s" % name)
+                    return
         else:
             self.addfile(tarinfo)
 
@@ -451,6 +455,7 @@ class Backupset:
                     task.name = strip_hash(cfghandler.get(section, 'name', raw=False))
                     task.archive_name = strip_hash(cfghandler.get(section, 'archive_name', raw=False))
 
+                    # TODO: handle/convert timecode format in result dir (%Y, %M, %D, etc)
                     task.path_result_dir = strip_hash(cfghandler.get(section, 'result_dir', raw=False))
                     task.method = strip_hash(cfghandler.get(section, 'method', raw=False))
                     task.followsym = convert_to_bool(strip_hash(cfghandler.get(section, 'followsym', raw=False)))
@@ -776,6 +781,7 @@ class Backuptask:
             return False
         printLog("Executing backup task: \"" + Colors.colorblue + self.name + Colors.colorreset + "\"")
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
+            printWarning("skip_if_directory_nonexistent parameter was set, so:")
             printWarning("Skipping '" + self.name + "'")
             return False
         if not self.include_dirs:
