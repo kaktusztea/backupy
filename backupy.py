@@ -167,6 +167,15 @@ def filter_nonexistent_include_dirs(include_dirs):
         return True    # there was at least one unaccessable dir
 
 
+def create_dir(path):
+    try:
+        os.makedirs(name=path, exist_ok=True)
+    except OSError as err:
+        printError("Cannot create dir: %s" % path)
+        printError("(%s)" % err.strerror)
+        return False
+    return True
+
 def check_if_file_is_unreadable(path):
     return not os.access(path, os.R_OK)
 
@@ -456,6 +465,7 @@ class Backupset:
                     task.archive_name = strip_hash(cfghandler.get(section, 'archive_name', raw=False))
 
                     # TODO: handle/convert timecode format in result dir (%Y, %M, %D, etc)
+                    task.create_target_date_dir = convert_to_bool(strip_hash(cfghandler.get(section, 'create_target_date_dir', raw=False)))
                     task.path_result_dir = strip_hash(cfghandler.get(section, 'result_dir', raw=False))
                     task.method = strip_hash(cfghandler.get(section, 'method', raw=False))
                     task.followsym = convert_to_bool(strip_hash(cfghandler.get(section, 'followsym', raw=False)))
@@ -493,6 +503,8 @@ class Backupset:
                     ll = strip_hash(cfghandler.get(section, 'exclude_files', raw=False))
                     task.exclude_files = list(map(str.strip, ll.split(',')))
 
+                    date_today = get_date() if task.create_target_date_dir else ""
+
                     # archive_name
                     if check_string_contains_spaces(task.archive_name):
                         comment = "Space in archive name is not allowed: %s" % task.archive_name
@@ -526,7 +538,10 @@ class Backupset:
                                    "method = { tar ; targz ; tarbz2; zip}"]
                         exit_config_error(self.config_file, section, comment)
 
-                    task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
+                    if task.enabled and task.create_target_date_dir and not os.path.exists(os.path.join(task.path_result_dir, date_today)):
+                        create_dir(os.path.join(task.path_result_dir, date_today))
+
+                    task.archivefullpath = os.path.join(task.path_result_dir, date_today, task.archive_name)
 
                     # checks
                     task.check_mandatory_options()
@@ -556,6 +571,7 @@ class Backupset:
             return False
         for task in self.task_list:
             if task.compress_pre():
+                printLog("Processing...")
                 if task.method == "tar" or task.method == "targz" or task.method == "tarbz2":
                     task.compress_tar()
                 elif task.method == "zip":
@@ -577,6 +593,7 @@ class Backuptask:
         self.method = ''
         self.followsym = False
         self.withpath = False
+        self.create_target_date_dir = True
         self.skip_if_permission_fail = False
         self.skip_if_directory_nonexistent = False
         self.include_dirs = []
