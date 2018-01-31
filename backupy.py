@@ -45,6 +45,7 @@ import datetime
 import platform
 import argparse
 import configparser
+from collections import OrderedDict
 try:
     import zlib
     zcompression = zipfile.ZIP_DEFLATED
@@ -175,6 +176,7 @@ def create_dir(path):
         printError("(%s)" % err.strerror)
         return False
     return True
+
 
 def check_if_file_is_unreadable(path):
     return not os.access(path, os.R_OK)
@@ -309,6 +311,15 @@ class Configglobal:
         self.exclude_files = []
         self.exclude_endings = []
         self.exclude_dir_names = []
+
+
+class LastUpdatedOrderedDict(OrderedDict):
+    'Store items in the order the keys were last added'
+
+    def __setitem__(self, key, value):
+        if key in self:
+            del self[key]
+        OrderedDict.__setitem__(self, key, value)
 
 
 class BackupyTarfile(tarfile.TarFile):
@@ -464,7 +475,6 @@ class Backupset:
                     task.name = strip_hash(cfghandler.get(section, 'name', raw=False))
                     task.archive_name = strip_hash(cfghandler.get(section, 'archive_name', raw=False))
 
-                    # TODO: handle/convert timecode format in result dir (%Y, %M, %D, etc)
                     task.create_target_date_dir = convert_to_bool(strip_hash(cfghandler.get(section, 'create_target_date_dir', raw=False)))
                     task.path_result_dir = strip_hash(cfghandler.get(section, 'result_dir', raw=False))
                     task.method = strip_hash(cfghandler.get(section, 'method', raw=False))
@@ -1067,9 +1077,9 @@ class Backupy:
         # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
         filehandler = ""
         cfghandler = configparser.ConfigParser()
-        cfghandler['META'] = {'name': 'My backup set',
-                              'description': 'Free text about this backup set, its purpose, etc.',
-                              'enabled': 'yes'}
+        cfghandler['META'] = LastUpdatedOrderedDict({'name': 'My backup set'})
+        cfghandler['META']['description'] = 'Free text about this backup set, its purpose, etc.'
+        cfghandler['META']['enabled'] = 'yes'
 
         cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
                                          'exclude_files': 'Thumbs.db, abcdefgh.txt',
@@ -1082,6 +1092,7 @@ class Backupy:
                                              'method': 'targz',
                                              'followsym': 'yes',
                                              'withpath': 'no',
+                                             'create_target_date_dir': 'yes',
                                              'skip_if_permission_fail': 'no',
                                              'skip_if_directory_nonexistent': 'no',
                                              'include_dir1': '/home/joe/humour                # at least one is mandatory',
