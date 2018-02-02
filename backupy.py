@@ -56,7 +56,7 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2017, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '1.1.5'
+__version__ = '1.2.0'
 __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ ch'
 __status__ = 'Production'
@@ -807,9 +807,13 @@ class Backuptask:
             printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % self.name)
             return False
         printLog("Executing backup task: \"" + Colors.colorblue + self.name + Colors.colorreset + "\"")
+        if self.method == "zip" and self.followsym:
+            printWarning("'Method: zip' is incompatible with 'followsym = yes'. Zip compression is unable to follow symlink. Sad.")
+            return False
+
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
-            printWarning("skip_if_directory_nonexistent parameter was set, so:")
-            printWarning("Skipping '" + self.name + "'")
+            printWarning("Skipping backup task: '" + self.name + "'")
+            printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
             return False
         if not self.include_dirs:
             printWarning("Backup task \"%s\" include_dir pathes are all invalid --> SKIPPING" % self.name)
@@ -1040,6 +1044,7 @@ class Backupy:
               "   [BACKUP1]                            # Mandatory name pattern: BACKUP[1-99] (99 max) ; don't write anything after the number\n"
               "  *name = My Document backup            # write backup task name here\n"
               "  *enabled = yes                        # is this backup active. {yes, no}\n"
+              "  *create_target_date_dir = yes         # Creates subdir in target dir from date in format: YYYY-MM-DD\n"
               "  *archive_name = document_backup       # archive file name without extension\n"
               "  *path_result_dir = /home/joe/backup   # Where to create the archive file\n"
               "  *method = targz                       # Compression method {tar, targz, tarbz2, zip}\n"
@@ -1089,7 +1094,7 @@ class Backupy:
                                              'enabled': 'no',
                                              'archive_name': 'document_backup' + str(i),
                                              'result_dir': '/home/joe/mybackups',
-                                             'method': 'targz',
+                                             'method': 'tarbz2',
                                              'followsym': 'yes',
                                              'withpath': 'no',
                                              'create_target_date_dir': 'yes',
@@ -1123,6 +1128,10 @@ class Backupy:
                 printError("(%s)" % err.strerror)
                 sys.exit(1)
         if not os.path.exists(self.path_default_config_file):
+            if self.validate:
+                printError("There is no default config file or given as a parameter (-s). There is nothing to validate.")
+                printError("You can create default config file by running backupy.py without parameteres.")
+                sys.exit(1)
             printLog("First run!")
             printLog("Generating default config file: %s" % self.path_default_config_file)
             self.create_config_file()
