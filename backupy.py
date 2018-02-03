@@ -549,7 +549,7 @@ class Backupset:
                         exit_config_error(self.config_file, section, comment)
 
                     if task.enabled and task.create_target_date_dir and not os.path.exists(os.path.join(task.path_result_dir, date_today)):
-                        create_dir(os.path.join(task.path_result_dir, date_today))
+                        task.path_result_dir = os.path.join(task.path_result_dir, date_today)
 
                     task.archivefullpath = os.path.join(task.path_result_dir, date_today, task.archive_name)
 
@@ -811,6 +811,11 @@ class Backuptask:
             printWarning("'Method: zip' is incompatible with 'followsym = yes'. Zip compression is unable to follow symlink. Sad.")
             return False
 
+        if not create_dir(self.path_result_dir):
+            self.enabled = False
+            printError("Skipping backup task '%s'" % self.name)
+            return False
+
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
             printWarning("Skipping backup task: '" + self.name + "'")
             printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
@@ -821,7 +826,7 @@ class Backuptask:
         if os.path.isfile(self.archivefullpath):
             printWarning("There is already an archive with this name:")
             printWarning("%s" % self.archivefullpath)
-            printWarning("Skipping '" + self.name + "'")
+            printWarning("Skipping backup task '" + self.name + "'")
             return False
         if self.skip_if_permission_fail:
             printLog("Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: " + str(self.followsym) + ")")
@@ -895,7 +900,8 @@ class Backuptask:
                 printError("IOError/OSError: Unhandled exception: %s" % err.strerror)
                 sys.exit(99)
         finally:
-            archive.close()
+            if archive:
+                archive.close()
             self.pop_broken_symlinks()
 
         self.store_md5(self.archivefullpath)
