@@ -54,7 +54,7 @@ except ImportError:
 
 # Globals
 __author__ = 'Balint Fekete'
-__copyright__ = 'Copyright 2017, Balint Fekete'
+__copyright__ = 'Copyright 2018, Balint Fekete'
 __license__ = 'GPLv3'
 __version__ = '1.2.0'
 __maintainer__ = 'Balint Fekete'
@@ -314,11 +314,15 @@ class Configglobal:
 
 
 class LastUpdatedOrderedDict(OrderedDict):
-    'Store items in the order the keys were last added'
+    """ Store items in the order the keys were last added
+    """
 
     def __setitem__(self, key, value):
         if key in self:
             del self[key]
+        OrderedDict.__setitem__(self, key, value)
+
+    def additem(self, key, value):
         OrderedDict.__setitem__(self, key, value)
 
 
@@ -1087,31 +1091,34 @@ class Backupy:
         # TODO: store config lines in a fix order
         # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
         filehandler = ""
-        cfghandler = configparser.ConfigParser()
-        cfghandler['META'] = LastUpdatedOrderedDict({'name': 'My backup set'})
-        cfghandler['META']['description'] = 'Free text about this backup set, its purpose, etc.'
-        cfghandler['META']['enabled'] = 'yes'
+        cfghandler = configparser.ConfigParser(dict_type=OrderedDict)
+        cfghandler['META'] = {'name': 'My backup set',
+                              'description': 'Free text about this backup set, its purpose, etc.',
+                              'enabled': 'yes'}
+
 
         cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
                                          'exclude_files': 'Thumbs.db, abcdefgh.txt',
                                          'exclude_dir_names': 'my_globaly_exclude_dir'}
+
         for i in range(1, 4):
             cfghandler['BACKUP' + str(i)] = {'name': 'Document backup' + str(i) + '           # comments are allowed',
                                              'enabled': 'no',
                                              'archive_name': 'document_backup' + str(i),
                                              'result_dir': '/home/joe/mybackups',
-                                             'method': 'tarbz2',
+                                             'create_target_date_dir': 'yes',
+                                             'method': 'targz',
                                              'followsym': 'yes',
                                              'withpath': 'no',
-                                             'create_target_date_dir': 'yes',
                                              'skip_if_permission_fail': 'no',
                                              'skip_if_directory_nonexistent': 'no',
                                              'include_dir1': '/home/joe/humour                # at least one is mandatory',
                                              'include_dir2': '/home/joe/novels',
                                              'exclude_dir_names': 'garbage, temp',
-                                             'exclude_dir_fullpath': '/home/joe/humour/saskabare, /home/joe/novels/bad_ones',
+                                             'exclude_dir_fullpath': '/home/joe/humour/saskabare, /home/joe / novels / bad_ones',
                                              'exclude_endings': '~, gif, jpg, bak',
                                              'exclude_files': 'abc.log, swp.db'}
+
         try:
             filehandler = open(self.path_default_config_file, "w")
             cfghandler.write(filehandler, space_around_delimiters=True)
