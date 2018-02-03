@@ -671,6 +671,13 @@ class Backuptask:
         self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
         self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
 
+    @staticmethod
+    def get_skip_task_string(task):
+        if isinstance(task, str):
+            return "Skipping backup task '%s'" % task
+        else:
+            raise Exception("get_skip_task_string(): didn't got str")
+
     @property
     def check_include_dir_dups(self):
         return len(self.include_dirs) == len(set(self.include_dirs))
@@ -817,11 +824,11 @@ class Backuptask:
 
         if not create_dir(self.path_result_dir):
             self.enabled = False
-            printError("Skipping backup task '%s'" % self.name)
+            printWarning(self.get_skip_task_string(self.name))
             return False
 
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
-            printWarning("Skipping backup task: '" + self.name + "'")
+            printWarning(self.get_skip_task_string(self.name))
             printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
             return False
         if not self.include_dirs:
@@ -830,7 +837,7 @@ class Backuptask:
         if os.path.isfile(self.archivefullpath):
             printWarning("There is already an archive with this name:")
             printWarning("%s" % self.archivefullpath)
-            printWarning("Skipping backup task '" + self.name + "'")
+            printWarning(self.get_skip_task_string(self.name))
             return False
         if self.skip_if_permission_fail:
             printLog("Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: " + str(self.followsym) + ")")
@@ -842,7 +849,7 @@ class Backuptask:
                     printWarning(unreadable_files)
                     exit_flag = True
             if exit_flag:
-                printWarning("Skipping '" + self.name + "'")
+                printWarning(self.get_skip_task_string(self.name))
                 return False
 
         if not os.path.isdir(self.path_result_dir):
@@ -904,7 +911,7 @@ class Backuptask:
                 printError("IOError/OSError: Unhandled exception: %s" % err.strerror)
                 sys.exit(99)
         finally:
-            if archive:
+            if isinstance(archive, BackupyTarfile):
                 archive.close()
             self.pop_broken_symlinks()
 
@@ -1088,36 +1095,58 @@ class Backupy:
         printLog("Elapsed time: {:0>2}:{:0>2}:{:02.0f}".format(int(hours), int(minutes), seconds), 1)
 
     def create_config_file(self):
-        # TODO: store config lines in a fix order
-        # http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
         filehandler = ""
         cfghandler = configparser.ConfigParser(dict_type=OrderedDict)
-        cfghandler['META'] = {'name': 'My backup set',
-                              'description': 'Free text about this backup set, its purpose, etc.',
-                              'enabled': 'yes'}
 
+        cfghandler.read_dict(
+            OrderedDict((
+                ('META',
+                 OrderedDict((
+                     ('name', 'My backup set'),
+                     ('description', 'Free text about this backup set, its purpose, etc.'),
+                     ('enabled', 'yes')
+                 ))
+                 ),
+            ))
+        )
 
-        cfghandler['GLOBAL_EXCLUDES'] = {'exclude_endings': '~, swp',
-                                         'exclude_files': 'Thumbs.db, abcdefgh.txt',
-                                         'exclude_dir_names': 'my_globaly_exclude_dir'}
+        cfghandler.read_dict(
+            OrderedDict((
+                ('GLOBAL_EXCLUDES',
+                 OrderedDict((
+                     ('exclude_endings', '~, swp'),
+                     ('exclude_files', 'Thumbs.db, abcdefgh.txt'),
+                     ('exclude_dir_names', 'my_globaly_exclude_dir')
+                 ))
+                 ),
+            ))
+        )
 
         for i in range(1, 4):
-            cfghandler['BACKUP' + str(i)] = {'name': 'Document backup' + str(i) + '           # comments are allowed',
-                                             'enabled': 'no',
-                                             'archive_name': 'document_backup' + str(i),
-                                             'result_dir': '/home/joe/mybackups',
-                                             'create_target_date_dir': 'yes',
-                                             'method': 'targz',
-                                             'followsym': 'yes',
-                                             'withpath': 'no',
-                                             'skip_if_permission_fail': 'no',
-                                             'skip_if_directory_nonexistent': 'no',
-                                             'include_dir1': '/home/joe/humour                # at least one is mandatory',
-                                             'include_dir2': '/home/joe/novels',
-                                             'exclude_dir_names': 'garbage, temp',
-                                             'exclude_dir_fullpath': '/home/joe/humour/saskabare, /home/joe / novels / bad_ones',
-                                             'exclude_endings': '~, gif, jpg, bak',
-                                             'exclude_files': 'abc.log, swp.db'}
+            cfghandler.read_dict(
+                OrderedDict((
+                    ('BACKUP' + str(i),
+                     OrderedDict((
+                         ('name', 'Document backup' + str(i) + '           # comments are allowed'),
+                         ('enabled', 'no'),
+                         ('archive_name', 'document_backup' + str(i)),
+                         ('result_dir', '/home/joe/mybackups'),
+                         ('create_target_date_dir', 'yes'),
+                         ('method', 'tarbz2'),
+                         ('followsym', 'yes'),
+                         ('withpath', 'no'),
+                         ('skip_if_permission_fail', 'no'),
+                         ('skip_if_directory_nonexistent', 'no'),
+                         ('include_dir1', '/home/joe/humour                # at least one is mandatory'),
+                         ('include_dir2', '/home/joe/novels'),
+                         ('exclude_dir_names', 'garbage, temp'),
+                         ('exclude_dir_fullpath', '/home/joe/humour/saskabare, /home/joe / novels / bad_ones'),
+                         ('exclude_endings', '~, gif, jpg, bak'),
+                         ('exclude_files', 'abc.log, swp.db')
+                     ))
+                     ),
+                ))
+            )
 
         try:
             filehandler = open(self.path_default_config_file, "w")
