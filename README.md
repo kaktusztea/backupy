@@ -1,4 +1,4 @@
-**backupy** is a handy (compressed) backup tool written in python 3.4.
+**backupy** is a handy backup tool written in python 3.4.
 
 License: GPLv3
 
