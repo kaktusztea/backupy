@@ -16,6 +16,8 @@ Copyright 2018, Balint Fekete
 * every backup task is customizable
     * enabled / disabled
     * archive file name
+    * result dir
+    * create date-format subdir in result dir
     * compression method (tar, targz, tarbz2, zip)
     * store files/directories with/without full path
     * follow symlinks (yes/no)
@@ -24,7 +26,6 @@ Copyright 2018, Balint Fekete
     * exclude directory with fullpath
     * exclude filenames
     * exclude filetypes (special: '~'  →  mynovel.doc~ )
-    * result dir
     * skip task if permission fail
     * skip task if directory is non-existent
 
