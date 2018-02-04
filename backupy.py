@@ -552,10 +552,10 @@ class Backupset:
                                    "method = { tar ; targz ; tarbz2; zip}"]
                         exit_config_error(self.config_file, section, comment)
 
-                    if task.enabled and task.create_target_date_dir and not os.path.exists(os.path.join(task.path_result_dir, date_today)):
+                    if task.enabled and task.create_target_date_dir:
                         task.path_result_dir = os.path.join(task.path_result_dir, date_today)
 
-                    task.archivefullpath = os.path.join(task.path_result_dir, date_today, task.archive_name)
+                    task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
 
                     # checks
                     task.check_mandatory_options()
@@ -821,12 +821,10 @@ class Backuptask:
         if self.method == "zip" and self.followsym:
             printWarning("'Method: zip' is incompatible with 'followsym = yes'. Zip compression is unable to follow symlink. Sad.")
             return False
-
         if not create_dir(self.path_result_dir):
             self.enabled = False
             printWarning(self.get_skip_task_string(self.name))
             return False
-
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
             printWarning(self.get_skip_task_string(self.name))
             printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
