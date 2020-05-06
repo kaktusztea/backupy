@@ -2,7 +2,7 @@
 
 License: GPLv3
 
-Copyright 2018, Balint Fekete
+Copyright 2020, Balint Fekete
 
 ## Feature list ##
 
@@ -35,8 +35,6 @@ Copyright 2018, Balint Fekete
 ### Set up, get repo ###
 
 ```
-#!bash
-
 git clone https://bitbucket.org/kaktusztea/backupy.git
 ```
 
@@ -44,8 +42,6 @@ git clone https://bitbucket.org/kaktusztea/backupy.git
 ### Help ###
 
 ```
-#!bash
-
 ./backupy.py --help
 ```
 
@@ -53,8 +49,6 @@ git clone https://bitbucket.org/kaktusztea/backupy.git
 ### Initial configuration: creating default.cfg ###
 
 ```
-#!bash
-
 ./backupy.py
 ```
 
@@ -62,8 +56,6 @@ git clone https://bitbucket.org/kaktusztea/backupy.git
 ### customize default backup set and start backup ###
 
 ```
-#!bash
-
 vi ~/.config/backupy/default.cfg   (customize)
 ./backupy.py   (start backup with default backup set)
 ```
@@ -72,8 +64,6 @@ vi ~/.config/backupy/default.cfg   (customize)
 ### create custom backup set and start backup ###
 
 ```
-#!bash
-
 cp ~/.config/backupy/default.cfg /my/path/mybackup.cfg
 vi /my/path/mybackup.cfg   (customize)
 ./backupy.py /my/path/mybackup.cfg
@@ -90,7 +80,6 @@ vi /my/path/mybackup.cfg   (customize)
 * META section
   
 ```
-#!bash
    [META]
    description = "This is my set for weekly data backup"
    author = myuser
@@ -118,7 +107,5 @@ If you have comments, found a bug or just want to explain how awesome this scrip
 
 
 ```
-#!bash
-
-kaktusztea _ at_ protonmail _ dot_ ch
+kaktusztea _ at_ protonmail _ dot_ com
 ```
