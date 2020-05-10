@@ -35,7 +35,7 @@ Copyright 2020, Balint Fekete
 ### Set up, get repo ###
 
 ```
-git clone https://bitbucket.org/kaktusztea/backupy.git
+git clone https://github.com/kaktusztea/backupy.git
 ```
 
 
