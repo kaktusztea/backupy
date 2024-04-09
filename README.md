@@ -25,7 +25,7 @@ Copyright 2020, Balint Fekete
     * exclude directory names
     * exclude directory with fullpath
     * exclude filenames
-    * exclude filetypes (special: '~'  →  mynovel.doc~ )
+    * exclude filetypes (special: '~'  →  mynovel.doc\~ )
     * skip task if permission fail
     * skip task if directory is non-existent
 
