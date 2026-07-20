@@ -407,13 +407,10 @@ class Backupset:
         for task in self.task_list:
             if task.compress_pre():
                 printLog("Processing...")
-                match task.method:
-                    case "tar" | "targz" | "tarbz2" | "tarxz":
-                        task.compress_tar()
-                    case "zip":
-                        task.compress_zip()
-                    case _:
-                        printLog(f"Wrong method type in {task.name}.")
+                if task.method == "zip":
+                    task.compress_zip()
+                else:
+                    task.compress_tar()
         printLog(Backupy.double_line)
 
 
