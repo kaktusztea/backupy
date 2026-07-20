@@ -357,6 +357,10 @@ class Backupset:
                 task.exclude_endings = add_dot_for_endings(list(section.get("exclude_endings", [])))
                 task.exclude_files = list(section.get("exclude_files", []))
 
+                # precompute merged exclude lists (global + task)
+                task._all_endings = tuple(self.g.exclude_endings + task.exclude_endings)
+                task._all_files = self.g.exclude_files + task.exclude_files
+
                 # archive filename with timestamp + extension
                 if task.archive_name.strip() == '':
                     exit_config_error(self.config_file, section_name, "'archive_name' is mandatory.")
@@ -472,53 +476,29 @@ class Backuptask:
         wr.writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
         myfile.close()
 
-    def filter_general(self, item, root_dir=''):
-        mode = ""
-        retval_skip = ""
-        filenamefull = ""
-        if isinstance(item, str):
-            filenamefull = item
-            mode = "zip"
-            retval_skip = False
-        elif isinstance(item, tarfile.TarInfo):
-            filenamefull = os.path.join(root_dir, item.name)
-            mode = "tar"
-            retval_skip = None
-
-        # exclude_endings (global + task-level merged)
-        all_endings = tuple(self.configs_global.exclude_endings + self.exclude_endings)
-        if all_endings and filenamefull.endswith(all_endings):
+    def _is_excluded(self, filenamefull, root_dir):
+        """Returns True if the file should be excluded."""
+        if self._all_endings and filenamefull.endswith(self._all_endings):
             printDebug(f"Exclude ending matched: {filenamefull}")
-            return retval_skip
-
-        # exclude_files (global + task-level merged)
-        all_files = self.configs_global.exclude_files + self.exclude_files
-        if Path(filenamefull).name in all_files:
+            return True
+        if Path(filenamefull).name in self._all_files:
             printDebug(f"Exclude file matched: {filenamefull}")
-            return retval_skip
-
-        # exclude_dir_names (global + task-level)
-        ll = getsub_dir_path(root_dir, filenamefull)
-        if any(dirname in ll.split("/") for dirname in self.configs_global.exclude_dir_names):
+            return True
+        parts = getsub_dir_path(root_dir, filenamefull).split("/")
+        if any(d in parts for d in self.configs_global.exclude_dir_names):
             printDebug(f"Global exclude dir names matched at: {filenamefull}")
-            return retval_skip
-        if any(dirname in ll.split("/")[1:] for dirname in self.exclude_dir_names):
+            return True
+        if any(d in parts[1:] for d in self.exclude_dir_names):
             printDebug(f"Task exclude dir names matched at: {filenamefull}")
-            return retval_skip
-
-        # exclude_dir_fullpath (task-level only)
+            return True
         if any(dirname in filenamefull for dirname in self.exclude_dir_fullpath):
             printDebug(f"Exclude dir fullpath matched at: {filenamefull}")
-            return retval_skip
+            return True
+        return False
 
-        # No filtering occurred, file can be passed to compressor
-        match mode:
-            case "zip":
-                return True
-            case "tar":
-                return item
-            case _:
-                raise Exception("filter_general(): Impossible return value.")
+    def filter_tar(self, item, root_dir):
+        """tarfile filter callback: returns TarInfo or None."""
+        return None if self._is_excluded(os.path.join(root_dir, item.name), root_dir) else item
 
     def compress_pre(self):
         """Pre-flight checks before compression. Returns True if task can proceed."""
@@ -581,7 +561,7 @@ class Backuptask:
                 for entry in self.include_dirs:
                     arcname = entry if self.withpath else os.path.basename(entry)
                     root_dir = os.path.dirname(entry)
-                    archive.add(entry, arcname=arcname, filter=lambda x, r=root_dir: self.filter_general(x, r))
+                    archive.add(entry, arcname=arcname, filter=lambda x, r=root_dir: self.filter_tar(x, r))
 
         except OSError as err:
             match err.errno:
@@ -605,7 +585,7 @@ class Backuptask:
                         for filename in files:
                             file_fullpath = os.path.join(subdir, filename)
 
-                            if not self.filter_general(file_fullpath, entry):
+                            if self._is_excluded(file_fullpath, entry):
                                 continue
                             if self.check_if_symlink_broken(file_fullpath):
                                 printWarning(f"broken symlink (skip): {file_fullpath}")
