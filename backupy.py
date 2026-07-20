@@ -598,60 +598,41 @@ class Backuptask:
 
     def compress_zip(self):
         """ Compressing with zip method """
-        archive = ""
         try:
-            archive = zipfile.ZipFile(file=self.archivefullpath, mode="w", compression=zcompression)
-        except (IOError, OSError) as err:
-            if archive:
-                archive.close()
-            if err.errno == errno.EACCES:
-                printError(f"OSError: Can't write to this file: {self.archivefullpath}")
-                sys.exit(err.errno)
-            elif err.errno == errno.ENOSPC:
-                printError("IOError/OSError: No space on disk")
-                sys.exit(err.errno)
-            else:
-                printError(f"IOError/OSError: Unhandled error: {err.strerror}")
-                sys.exit(99)
+            with zipfile.ZipFile(file=self.archivefullpath, mode="w", compression=zcompression) as archive:
+                for entry in self.include_dirs:
+                    for subdir, dirs, files in os.walk(top=entry, followlinks=True):
+                        for filename in files:
+                            file_fullpath = os.path.join(subdir, filename)
 
-        # filtering + adding procedure starts by walking through on every file path
-        for entry in self.include_dirs:
-            for subdir, dirs, files in os.walk(top=entry, followlinks=True):
-                for filename in files:
-                    dirpart = getsub_dir_path(entry, subdir)
-                    if self.filter_general(os.path.join(subdir, filename), entry):
-                        file_fullpath = os.path.join(subdir, filename)
+                            if not self.filter_general(file_fullpath, entry):
+                                continue
+                            if self.check_if_symlink_broken(file_fullpath):
+                                printWarning(f"broken symlink (skip): {file_fullpath}")
+                                continue
 
-                        if self.check_if_symlink_broken(file_fullpath):
-                            printWarning(f"broken symlink (skip): {file_fullpath}")
-                            continue
+                            arcname = file_fullpath if self.withpath else os.path.join(getsub_dir_path(entry, subdir), filename)
+                            try:
+                                archive.write(filename=file_fullpath, arcname=arcname)
+                            except UnicodeEncodeError:
+                                printWarning(f"Skip file (name encoding problem): {subdir}")
+                            except PermissionError:
+                                printWarning(f"Skip file (permission error): {file_fullpath}")
+                            except OSError as err:
+                                printWarning(f"Skip file ({err.strerror}): {file_fullpath}")
 
-                        try:
-                            if self.withpath:
-                                archive.write(filename=file_fullpath, compress_type=zcompression)
-                            else:
-                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
-                        except (UnicodeEncodeError, IOError, OSError, PermissionError) as err:
-                            if isinstance(err, UnicodeEncodeError):
-                                printWarning(f"Skip file (name encoding problem in dir): {subdir}")
-                                continue
-                            if isinstance(err, PermissionError):
-                                try:
-                                    printWarning(f"Skip file (permission error): {file_fullpath}")
-                                except UnicodeEncodeError:
-                                    printWarning(f"Skip file (permission AND name encoding problem somewhere in dir): {subdir}")
-                                continue
-                            elif err.errno == errno.ENOENT:
-                                printLog(f"OSError: No such file or directory to compress: {self.archivefullpath}")
-                                continue
-                            else:
-                                printLog(f"Unhandled IOError/OSError: {err.strerror}")
-                                continue
-        if archive:
-            archive.close()
-            self.store_md5(self.archivefullpath)
-        filesize = os.path.getsize(self.archivefullpath)
-        printOK(f"Done [{sizeof_fmt(filesize)}]")
+        except OSError as err:
+            match err.errno:
+                case errno.ENOSPC:
+                    printError("No space on disk")
+                case errno.EACCES:
+                    printError(f"Permission denied: {self.archivefullpath}")
+                case _:
+                    printError(f"OSError: {err.strerror} ({self.archivefullpath})")
+            sys.exit(err.errno or 99)
+
+        self.store_md5(self.archivefullpath)
+        printOK(f"Done [{sizeof_fmt(os.path.getsize(self.archivefullpath))}]")
 
 
 class Backupy:
