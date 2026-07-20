@@ -572,28 +572,16 @@ class Backuptask:
 
     def compress_tar(self):
         """ Compressing with tar/targz method """
-        archive = ""
+        TAR_MODES = {'tar': 'w', 'targz': 'w:gz', 'tarbz2': 'w:bz2'}
+        mode = TAR_MODES[self.method]
+
         try:
-            match self.method:
-                case "tar":
-                    mode = "w"
-                case "targz":
-                    mode = "w:gz"
-                case "tarbz2":
-                    mode = "w:bz2"
-                case _:
-                    exit_config_error(self.path_config_file, self.section,
-                                      [f"Wrong compression method declared ({self.method})",
-                                       "method = { tar ; targz ; tarbz2; zip}"])
-
             # http://stackoverflow.com/a/39321142/4325232
-            archive = BackupyTarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
-
-            for entry in self.include_dirs:
-                if self.withpath:
-                    archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
-                else:
-                    archive.add(entry, arcname=os.path.basename(entry), filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
+            with BackupyTarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym) as archive:
+                for entry in self.include_dirs:
+                    arcname = entry if self.withpath else os.path.basename(entry)
+                    root_dir = os.path.dirname(entry)
+                    archive.add(entry, arcname=arcname, filter=lambda x, r=root_dir: self.filter_general(x, r))
 
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
@@ -608,13 +596,9 @@ class Backuptask:
             else:
                 printError(f"IOError/OSError: Unhandled exception: {err.strerror}")
                 sys.exit(99)
-        finally:
-            if isinstance(archive, BackupyTarfile):
-                archive.close()
 
         self.store_md5(self.archivefullpath)
-        filesize = os.path.getsize(self.archivefullpath)
-        printOK(f"Done [{sizeof_fmt(filesize)}]")
+        printOK(f"Done [{sizeof_fmt(os.path.getsize(self.archivefullpath))}]")
 
     def compress_zip(self):
         """ Compressing with zip method """
