@@ -34,14 +34,11 @@ import csv
 import time
 import errno
 import shutil
-import random
-import string
 import hashlib
 import tarfile
 import zipfile
 import datetime
 import argparse
-import tempfile
 import tomllib
 from pathlib import Path
 try:
@@ -156,10 +153,6 @@ def get_time_short():
     return datetime.datetime.now().strftime('%H%M')
 
 
-def get_random_string(length):
-    return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
-
-
 def printLog(log, pre_empty_lines=0):
     pp = "\n" * pre_empty_lines + get_time() + " " + str(log)
     print(pp)
@@ -266,7 +259,11 @@ class BackupyTarfile(tarfile.TarFile):
         self._dbg(1, name)
 
         # Create a TarInfo object from the file.
-        tarinfo = self.gettarinfo(name, arcname)
+        try:
+            tarinfo = self.gettarinfo(name, arcname)
+        except FileNotFoundError:
+            printWarning(f"Skip file (broken symlink): {name}")
+            return
 
         if tarinfo is None:
             self._dbg(1, f"tarfile: Unsupported type {name!r}")
@@ -284,8 +281,11 @@ class BackupyTarfile(tarfile.TarFile):
             try:
                 with open(name, "rb") as f:
                     self.addfile(tarinfo, f)
-            except PermissionError as err:
+            except PermissionError:
                 printWarning(f"Skip file (permission error): {name}")
+                return
+            except FileNotFoundError:
+                printWarning(f"Skip file (broken symlink): {name}")
                 return
 
         elif tarinfo.isdir():
@@ -491,14 +491,7 @@ class Backuptask:
         self.configs_global = cglobal
 
         self.path_config_file = path_config_file
-        self.path_stash = os.path.join(tempfile.gettempdir(), str(os.getpid()))
-        self.broken_syms = {}
         self.path_md5 = {}
-
-    def __del__(self):
-        if os.path.exists(self.path_stash):
-            printLog("Cleaning up")
-            shutil.rmtree(self.path_stash)
 
     def check_mandatory(self, option):
         err = False
@@ -530,59 +523,6 @@ class Backuptask:
     @staticmethod
     def check_if_symlink_broken(path):
         return os.path.islink(path) and not os.path.exists(path)
-
-    def get_broken_syms_in_recursive_subdir(self, subdir):
-        broken_list = []
-        for root, dirs, files in os.walk(subdir):
-            for file in files:
-                if self.check_if_symlink_broken(os.path.join(root, file)):
-                    broken_list.append(os.path.join(root, file))
-        if broken_list:
-            if not os.path.exists(self.path_stash):
-                try:
-                    os.makedirs(name=self.path_stash, mode=0o770, exist_ok=True)
-                except OSError as err:
-                    printError(f"Cannot create stash temp dir for broken symlinks: {self.path_stash}")
-                    printError(f"({err.strerror})")
-                    sys.exit(1)
-            return broken_list
-        return False
-
-    def stash_broken_symlinks(self, entry, syms):
-        if syms and isinstance(syms, list):
-            printDebug(f"Stashing broken symlinks to {self.path_stash} for {entry}")
-            for sym in syms:
-                temp_target = os.path.join(self.path_stash, Path(sym).name) + '_' + get_random_string(7)
-                self.broken_syms[sym] = temp_target
-                try:
-                    shutil.move(sym, temp_target)
-                    # TODO: place a dummy file instead of broken symlink: BROKEN_SYMLINK_mybroken.txt
-                    # TODO: Delete it at pop phase
-                except OSError as err:
-                    printError(f"Could not stash broken symlink: {sym}")
-                    printError(f"({err.strerror})")
-            printDebug("Broken symlinks and their stash location pairs:")
-            printDebug(self.broken_syms)
-            if len(syms):
-                verb = 'was' if len(syms) == 1 else 'were'
-                printWarning(f"There {verb} {len(syms)} (skipped) broken symlinks in {entry}")
-                self.list_broken_symlinks()
-
-    def pop_broken_symlinks(self):
-        if self.broken_syms:
-            printDebug(f"Popping broken symlinks from {self.path_stash} for {self.name}")
-            for origin, temp_target in self.broken_syms.items():
-                try:
-                    shutil.move(temp_target, origin)
-                except OSError as err:
-                    printError(f"Could not restore stashed broken symlink: {origin}")
-                    printError(f"({err.strerror})")
-            self.broken_syms.clear()
-
-    def list_broken_symlinks(self):
-        if self.broken_syms:
-            for symlink in self.broken_syms.keys():
-                printWarning(symlink)
 
     def store_md5(self, filepath):
         self.path_md5 = os.path.join(self.path_result_dir, "md5.sum")
@@ -726,22 +666,12 @@ class Backuptask:
             # http://stackoverflow.com/a/39321142/4325232
             archive = BackupyTarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
 
-            if self.withpath:
-                for entry in self.include_dirs:
-                    if self.followsym:  # workaround for "tar + follow symlinks + broken symmlinks" use case
-                        self.stash_broken_symlinks(entry, self.get_broken_syms_in_recursive_subdir(entry))
+            for entry in self.include_dirs:
+                if self.withpath:
                     archive.add(entry, filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
-                    if self.followsym:
-                        self.pop_broken_symlinks()
-            elif not self.withpath:
-                for entry in self.include_dirs:
-                    self.stash_broken_symlinks(entry, self.get_broken_syms_in_recursive_subdir(entry))
-                    # http://stackoverflow.com/questions/39438335/python-how-could-i-access-tarfile-adds-name-parameter-in-adds-filter-me
+                else:
                     archive.add(entry, arcname=os.path.basename(entry), filter=lambda x: self.filter_general(x, os.path.dirname(entry)))
-                    self.pop_broken_symlinks()
-            else:
-                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
-                sys.exit(1)
+
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
                 printError(f"OSError: {os.strerror(err.errno)} on {self.archivefullpath}")
@@ -758,7 +688,6 @@ class Backuptask:
         finally:
             if isinstance(archive, BackupyTarfile):
                 archive.close()
-            self.pop_broken_symlinks()
 
         self.store_md5(self.archivefullpath)
         filesize = os.path.getsize(self.archivefullpath)
