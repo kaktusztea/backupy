@@ -73,11 +73,10 @@ vi /my/path/mybackup.toml   (customize)
 * follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
 
 ## Planned features ##
-* exclude / include unique files
 
-* 7zip/lz support
-
-* META section
+- exclude / include unique files
+- 7zip/lz support
+- META section
 
 ```
    [meta]
