@@ -307,6 +307,7 @@ class Backupset:
             'tar': '.tar',
             'targz': '.tar.gz',
             'tarbz2': '.tar.bz2',
+            'tarxz': '.tar.xz',
             'zip': '.zip',
         }
 
@@ -414,7 +415,7 @@ class Backupset:
             if task.compress_pre():
                 printLog("Processing...")
                 match task.method:
-                    case "tar" | "targz" | "tarbz2":
+                    case "tar" | "targz" | "tarbz2" | "tarxz":
                         task.compress_tar()
                     case "zip":
                         task.compress_zip()
@@ -552,7 +553,7 @@ class Backuptask:
 
     def compress_tar(self):
         """ Compressing with tar/targz method """
-        TAR_MODES = {'tar': 'w', 'targz': 'w:gz', 'tarbz2': 'w:bz2'}
+        TAR_MODES = {'tar': 'w', 'targz': 'w:gz', 'tarbz2': 'w:bz2', 'tarxz': 'w:xz'}
         mode = TAR_MODES[self.method]
 
         try:
