@@ -2,7 +2,7 @@
 
 License: GPLv3
 
-Copyright 2024, Balint Fekete
+Copyright 2026, Balint Fekete
 
 ## Feature list ##
 
