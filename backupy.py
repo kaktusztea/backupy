@@ -725,16 +725,13 @@ Tips:
             sys.exit(1)
 
     def check_first_run(self):
-        if not os.path.exists(self.path_home):
-            printError(f"Can not access home directory: {self.path_home}")
+        try:
+            os.makedirs(name=self.path_default_configdir, exist_ok=True)
+        except OSError as err:
+            printError(f"Cannot create user config dir: {self.path_default_configdir}")
+            printError(f"({err.strerror})")
             sys.exit(1)
-        if not os.path.exists(self.path_default_configdir):
-            try:
-                os.makedirs(name=self.path_default_configdir, exist_ok=True)
-            except OSError as err:
-                printError(f"Cannot create user config dir: {self.path_default_configdir}")
-                printError(f"({err.strerror})")
-                sys.exit(1)
+
         if not os.path.exists(self.path_default_config_file):
             if self.validate:
                 printError("There is no default config file or given as a parameter (-s). There is nothing to validate.")
