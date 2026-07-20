@@ -1,0 +1,60 @@
+[meta]
+name = "My backup set"
+description = "Free text about this backup set, its purpose, etc."
+enabled = true
+
+[global_excludes]
+endings = ["~", ".swp"]
+files = ["Thumbs.db", "abcdefgh.txt"]
+dir_names = ["my_globally_excluded_dir"]
+
+[[backup]]
+name = "Document backup1"
+enabled = false
+archive_name = "document_backup1"
+result_dir = "/home/joe/mybackups"
+create_target_date_dir = true
+method = "tarbz2"
+followsym = true
+withpath = false
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = ["/home/joe/humour", "/home/joe/novels"]  # at least one is mandatory
+exclude_dir_names = ["garbage", "temp"]
+exclude_dir_fullpaths = ["/home/joe/humour/saskabare", "/home/joe/novels/bad_ones"]
+exclude_endings = ["~", ".gif", ".jpg", ".bak"]
+exclude_files = ["abc.log", "swp.db"]
+
+[[backup]]
+name = "Document backup2"
+enabled = false
+archive_name = "document_backup2"
+result_dir = "/home/joe/mybackups"
+create_target_date_dir = true
+method = "tarbz2"
+followsym = true
+withpath = false
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = ["/home/joe/humour", "/home/joe/novels"]
+exclude_dir_names = ["garbage", "temp"]
+exclude_dir_fullpaths = ["/home/joe/humour/saskabare", "/home/joe/novels/bad_ones"]
+exclude_endings = ["~", ".gif", ".jpg", ".bak"]
+exclude_files = ["abc.log", "swp.db"]
+
+[[backup]]
+name = "Document backup3"
+enabled = false
+archive_name = "document_backup3"
+result_dir = "/home/joe/mybackups"
+create_target_date_dir = true
+method = "tarbz2"
+followsym = true
+withpath = false
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = ["/home/joe/humour", "/home/joe/novels"]
+exclude_dir_names = ["garbage", "temp"]
+exclude_dir_fullpaths = ["/home/joe/humour/saskabare", "/home/joe/novels/bad_ones"]
+exclude_endings = ["~", ".gif", ".jpg", ".bak"]
+exclude_files = ["abc.log", "swp.db"]

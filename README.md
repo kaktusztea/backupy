@@ -8,7 +8,7 @@ Copyright 2024, Balint Fekete
 
 * backup sets are separatable in unique config files
 * multiple config files as parameters - able to execute them in one batch (in sequence)
-* unique backup tasks in backup sets (up to 99)
+* unique backup tasks in backup sets
 * global exclude lists (file, dir, filetype) for entire backup set
 * handling broken symlinks for "tar+follow syms+broken syms" use case
 * validate mode: only config file validation, no execution
@@ -46,7 +46,7 @@ git clone https://github.com/kaktusztea/backupy.git
 ```
 
 
-### Initial configuration: creating default.cfg ###
+### Initial configuration: creating default.toml ###
 
 ```
 ./backupy.py
@@ -56,7 +56,7 @@ git clone https://github.com/kaktusztea/backupy.git
 ### customize default backup set and start backup ###
 
 ```
-vi ~/.config/backupy/default.cfg   (customize)
+vi ~/.config/backupy/default.toml   (customize)
 ./backupy.py   (start backup with default backup set)
 ```
 
@@ -64,9 +64,9 @@ vi ~/.config/backupy/default.cfg   (customize)
 ### create custom backup set and start backup ###
 
 ```
-cp ~/.config/backupy/default.cfg /my/path/mybackup.cfg
-vi /my/path/mybackup.cfg   (customize)
-./backupy.py /my/path/mybackup.cfg
+cp ~/.config/backupy/default.toml /my/path/mybackup.toml
+vi /my/path/mybackup.toml   (customize)
+./backupy.py /my/path/mybackup.toml
 
 ```
 ## Known issues ##
@@ -80,9 +80,9 @@ vi /my/path/mybackup.cfg   (customize)
 * META section
   
 ```
-   [META]
+   [meta]
    description = "This is my set for weekly data backup"
-   author = myuser
+   author = "myuser"
    creation_date = 2016-09-01
 ```
 

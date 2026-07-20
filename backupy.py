@@ -7,7 +7,7 @@
 
     * backup sets are separatable in unique config files
     * multiple config files as parameters - able to execute them in one batch (in sequence)
-    * unique backup tasks in backup sets (up to 99)
+    * unique backup tasks in backup sets
     * global exclude lists (file, dir, filetype) for entire backup set
     * handling broken symlinks for "tar+follow syms+broken syms" use case
     * validate mode: only config file validation, no execution
@@ -17,7 +17,7 @@
         * archive file name
         * compression method (tar, targz, tarbz2, zip)
         * store files/directories with/without full path
-        * follow symlinks (yes/no)
+        * follow symlinks (true/false)
         * include directories (multiple entries)
         * exclude directory names
         * exclude directory with fullpath
@@ -28,7 +28,6 @@
         * skip task if directory is non-existent
 """
 
-import re
 import os
 import sys
 import csv
@@ -44,8 +43,7 @@ import zipfile
 import datetime
 import platform
 import argparse
-import configparser
-from collections import OrderedDict
+import tomllib
 try:
     import zlib
     zcompression = zipfile.ZIP_DEFLATED
@@ -74,43 +72,7 @@ def strip_dash_string_start(line):
     return line
 
 
-def strip_hash_string_end(line):
-    if isinstance(line, str):
-        return line.split("#")[0].rstrip()
-    else:
-        raise Exception("Error in def: strip_hash_string_end()")
 
-
-def strip_hash_on_list_values(mylist):
-    if isinstance(mylist, list):
-        for idx, elem in enumerate(mylist):
-            if isinstance(elem, list):     # recursive call
-                mylist[idx] = strip_hash_on_list_values(elem)
-            elif isinstance(elem, str):
-                mylist[idx] = strip_hash_string_end(elem)
-            else:
-                raise Exception("Error in def: strip_hash_on_list_values()")
-    return mylist
-
-
-def strip_hash_on_dict_values(mydict):
-    for idx, mylist in mydict.items():
-        if isinstance(mylist, list):
-            strip_hash_on_list_values(mylist)
-        elif isinstance(mylist, str):
-            mydict[idx] = strip_hash_string_end(mylist)
-        else:
-            raise Exception("Error in def: strip_hash_on_dict_values()")
-    return mydict
-
-
-def strip_hash(element):
-    if isinstance(element, dict):
-        return strip_hash_on_dict_values(element)
-    if isinstance(element, list):
-        return strip_hash_on_list_values(element)
-    if isinstance(element, str):
-        return strip_hash_string_end(element)
 
 
 def strip_enddash_on_list(endinglist):
@@ -121,20 +83,8 @@ def strip_enddash_on_list(endinglist):
     return endinglist
 
 
-def convert_to_bool(mystr):
-    if str(mystr).lower() == 'yes':
-        return True
-    elif str(mystr).lower() == 'no':
-        return False
-    return -1
-
-
 def check_string_contains_spaces(line):
     return " " in line
-
-
-def check_string_contains_comma(line):
-    return "," in line
 
 
 def add_dot_for_endings(endinglist):
@@ -313,19 +263,6 @@ class Configglobal:
         self.exclude_dir_names = []
 
 
-class LastUpdatedOrderedDict(OrderedDict):
-    """ Store items in the order the keys were last added
-    """
-
-    def __setitem__(self, key, value):
-        if key in self:
-            del self[key]
-        OrderedDict.__setitem__(self, key, value)
-
-    def additem(self, key, value):
-        OrderedDict.__setitem__(self, key, value)
-
-
 class BackupyTarfile(tarfile.TarFile):
     """ Override default built-in python tarfile library's add method
         to handle permission read errors and be able to skip intead of
@@ -424,40 +361,29 @@ class Backupset:
         return False
 
     def get_configs_meta(self):
-        cfghandler = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-        cfghandler.optionxform = str
         try:
-            cfghandler.read(self.config_file)
-            self.name = strip_hash(cfghandler.get("META", 'name', raw=False))
-            self.description = strip_hash(cfghandler.get("META", 'description', raw=False))
-            self.enabled = convert_to_bool(strip_hash(cfghandler.get("META", 'enabled', raw=False)))
-        except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
+            with open(self.config_file, "rb") as f:
+                cfg = tomllib.load(f)
+            meta = cfg["meta"]
+            self.name = meta["name"]
+            self.description = meta.get("description", "")
+            self.enabled = meta["enabled"]
+        except (tomllib.TOMLDecodeError, KeyError) as err:
             printError("Backup set config file is invalid: %s" % self.config_file)
-            printError("%s" % err.message)
+            printError("%s" % str(err))
             sys.exit(1)
 
     def get_configs_global(self):
-        cfghandler = configparser.ConfigParser()
         try:
-            cfghandler.read(self.config_file)
-            # self.section_list = cfghandler.sections()
-
-            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_endings', raw=False)
-            self.g.exclude_endings = list(map(str.strip, ll.split(',')))
-            self.g.exclude_endings = add_dot_for_endings(self.g.exclude_endings)
-
-            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_files', raw=False)
-            self.g.exclude_files = list(map(str.strip, ll.split(',')))
-
-            ll = cfghandler.get('GLOBAL_EXCLUDES', 'exclude_dir_names', raw=False)
-            self.g.exclude_dir_names = list(map(str.strip, ll.split(',')))
-            self.g.exclude_dir_names = strip_enddash_on_list(self.g.exclude_dir_names)
-            self.g.exclude_dir_names = strip_hash_on_list_values(self.g.exclude_dir_names)
-
-            # bconfig = strip_hash_on_dict_values(bconfig)
-        except configparser.Error as err:
+            with open(self.config_file, "rb") as f:
+                cfg = tomllib.load(f)
+            glb = cfg.get("global_excludes", {})
+            self.g.exclude_endings = add_dot_for_endings(list(glb.get("endings", [])))
+            self.g.exclude_files = list(glb.get("files", []))
+            self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
+        except (tomllib.TOMLDecodeError, KeyError) as err:
             printError("Config file syntax error: %s" % self.config_file)
-            printError("%s" % err.message)
+            printError("%s" % str(err))
             sys.exit(1)
         except OSError as oerr:
             printError("OSError: %s" % self.config_file)
@@ -465,112 +391,86 @@ class Backupset:
             sys.exit(1)
 
     def get_configs_tasks(self):
-        cfghandler = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-        cfghandler.optionxform = str
         try:
-            cfghandler.read(self.config_file)
-            pattern = re.compile("BACKUP[0-9]{1,2}$")
-            for section in cfghandler.sections():
-                if pattern.match(section):
-                    task = Backuptask(section, self.g, self.config_file)
-                    task.section = strip_hash(section)
-                    task.enabled = convert_to_bool(strip_hash(cfghandler.get(section, 'enabled', raw=False)))
+            with open(self.config_file, "rb") as f:
+                cfg = tomllib.load(f)
+            backups = cfg.get("backup", [])
 
-                    task.name = strip_hash(cfghandler.get(section, 'name', raw=False))
-                    task.archive_name = strip_hash(cfghandler.get(section, 'archive_name', raw=False))
+            for idx, section in enumerate(backups):
+                section_name = "backup[%d]" % idx
+                task = Backuptask(section_name, self.g, self.config_file)
+                task.section = section_name
+                task.enabled = section["enabled"]
+                task.name = section["name"]
+                task.archive_name = section["archive_name"]
+                task.create_target_date_dir = section["create_target_date_dir"]
+                task.path_result_dir = section["result_dir"]
+                task.method = section["method"]
+                task.followsym = section["followsym"]
+                task.withpath = section["withpath"]
+                task.skip_if_permission_fail = section["skip_if_permission_fail"]
+                task.skip_if_directory_nonexistent = section["skip_if_directory_nonexistent"]
 
-                    task.create_target_date_dir = convert_to_bool(strip_hash(cfghandler.get(section, 'create_target_date_dir', raw=False)))
-                    task.path_result_dir = strip_hash(cfghandler.get(section, 'result_dir', raw=False))
-                    task.method = strip_hash(cfghandler.get(section, 'method', raw=False))
-                    task.followsym = convert_to_bool(strip_hash(cfghandler.get(section, 'followsym', raw=False)))
-                    task.withpath = convert_to_bool(strip_hash(cfghandler.get(section, 'withpath', raw=False)))
-                    task.skip_if_permission_fail = convert_to_bool(strip_hash(cfghandler.get(section, 'skip_if_permission_fail', raw=False)))
-                    task.skip_if_directory_nonexistent = convert_to_bool(strip_hash(cfghandler.get(section, 'skip_if_directory_nonexistent', raw=False)))
+                task.include_dirs = strip_enddash_on_list(list(section["include_dirs"]))
+                task.exclude_dir_fullpath = strip_enddash_on_list(list(section.get("exclude_dir_fullpaths", [])))
+                task.exclude_dir_names = strip_enddash_on_list(list(section.get("exclude_dir_names", [])))
+                task.exclude_endings = add_dot_for_endings(list(section.get("exclude_endings", [])))
+                task.exclude_files = list(section.get("exclude_files", []))
 
-                    i = 1
-                    while 'include_dir'+str(i) in cfghandler[section]:
-                        ll = strip_hash(cfghandler.get(section, 'include_dir'+str(i), raw=False))
-                        if len(ll) > 0:
-                            task.include_dirs.append(ll)
-                        i += 1
-                    task.include_dirs = strip_enddash_on_list(task.include_dirs)
+                date_today = get_date() if task.create_target_date_dir else ""
 
-                    i = 1
-                    while 'exclude_dir_fullpath'+str(i) in cfghandler[section]:
-                        ll = strip_hash(cfghandler.get(section, 'exclude_dir_fullpath'+str(i), raw=False))
-                        if len(ll) > 0:
-                            task.exclude_dir_fullpath.append(ll)
-                        i += 1
-                    task.exclude_dir_fullpath = strip_enddash_on_list(task.exclude_dir_fullpath)
+                # archive_name
+                if check_string_contains_spaces(task.archive_name):
+                    comment = "Space in archive name is not allowed: %s" % task.archive_name
+                    exit_config_error(self.config_file, section_name, comment)
+                if task.archive_name.strip() == '':
+                    errmsg = "'archive_name' is mandatory."
+                    exit_config_error(self.config_file, section_name, errmsg)
 
-                    # exclude_dir_names
-                    ll = strip_hash(cfghandler.get(section, 'exclude_dir_names', raw=False))
-                    task.exclude_dir_names = list(map(str.strip, ll.split(',')))
-                    task.exclude_dir_names = strip_enddash_on_list(task.exclude_dir_names)
+                # include_dirs validation
+                for n, inclpath in enumerate(task.include_dirs):
+                    if check_string_contains_spaces(inclpath):
+                        errmsg = "Space in include_dirs[%d] is not allowed" % n
+                        exit_config_error(self.config_file, section_name, errmsg)
 
-                    # exclude_endings
-                    ll = strip_hash(cfghandler.get(section, 'exclude_endings', raw=False))
-                    task.exclude_endings = list(map(str.strip, ll.split(',')))
-                    task.exclude_endings = add_dot_for_endings(task.exclude_endings)
+                # exclude_dir_fullpaths validation
+                for n, exclpath in enumerate(task.exclude_dir_fullpath):
+                    if check_string_contains_spaces(exclpath):
+                        errmsg = "Space in exclude_dir_fullpaths[%d] is not allowed" % n
+                        exit_config_error(self.config_file, section_name, errmsg)
 
-                    # exclude_files
-                    ll = strip_hash(cfghandler.get(section, 'exclude_files', raw=False))
-                    task.exclude_files = list(map(str.strip, ll.split(',')))
+                if task.method == 'tar':
+                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar'
+                elif task.method == 'targz':
+                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
+                elif task.method == 'tarbz2':
+                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.bz2'
+                elif task.method == 'zip':
+                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.zip'
+                else:
+                    comment = ["Wrong compression method declared (%s)" % task.method,
+                               "method = { tar ; targz ; tarbz2; zip}"]
+                    exit_config_error(self.config_file, section_name, comment)
 
-                    date_today = get_date() if task.create_target_date_dir else ""
+                if task.enabled and task.create_target_date_dir:
+                    task.path_result_dir = os.path.join(task.path_result_dir, date_today)
 
-                    # archive_name
-                    if check_string_contains_spaces(task.archive_name):
-                        comment = "Space in archive name is not allowed: %s" % task.archive_name
-                        exit_config_error(self.config_file, section, comment)
-                    if task.archive_name.strip() == '':
-                        errmsg = "'archive_name' is mandatory."
-                        exit_config_error(self.config_file, section, errmsg)
+                task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
 
-                    # include_dir
-                    for n, inclpath in enumerate(task.include_dirs):
-                        if check_string_contains_spaces(inclpath) or check_string_contains_comma(inclpath):
-                            errmsg = "Space, comma in 'include_dir"+str(n+1)+" is not allowed"
-                            exit_config_error(self.config_file, section, errmsg)
+                # checks
+                task.check_mandatory_options()
+                if not task.check_include_dir_dups:
+                    exit_config_error(self.config_file, section_name, "'include_dirs' duplicates are not allowed.")
 
-                    # exclude_dir_fullpath
-                    for n, exclpath in enumerate(task.exclude_dir_fullpath):
-                        if check_string_contains_spaces(exclpath) or check_string_contains_comma(exclpath):
-                            errmsg = "Space, comma in 'exclude_dir%s' is not allowed" % str(n+1)
-                            exit_config_error(self.config_file, section, errmsg)
-
-                    if task.method == 'tar':
-                        task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar'
-                    elif task.method == 'targz':
-                        task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
-                    elif task.method == 'tarbz2':
-                        task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.bz2'
-                    elif task.method == 'zip':
-                        task.archive_name += '_' + get_date() + '_' + get_time_short() + '.zip'
-                    else:
-                        comment = ["Wrong compression method declared (%s)" % task.method,
-                                   "method = { tar ; targz ; tarbz2; zip}"]
-                        exit_config_error(self.config_file, section, comment)
-
-                    if task.enabled and task.create_target_date_dir:
-                        task.path_result_dir = os.path.join(task.path_result_dir, date_today)
-
-                    task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
-
-                    # checks
-                    task.check_mandatory_options()
-                    if not task.check_include_dir_dups:
-                        exit_config_error(self.config_file, section, "'include_dirN' duplicates are not allowed.")
-
-                    self.task_list.append(task)
-                    del task
+                self.task_list.append(task)
+                del task
 
             if not self.check_archivename_unique():
                 exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
-        except (configparser.NoSectionError, configparser.NoOptionError, configparser.Error) as err:
+        except (tomllib.TOMLDecodeError, KeyError) as err:
             printError("Invalid config file: %s" % self.config_file)
-            printError("%s" % err.message)
+            printError("%s" % str(err))
             sys.exit(1)
 
     def execute(self):
@@ -649,10 +549,6 @@ class Backuptask:
         if err:
             raise Exception("'%s' is mandatory!" % option)
 
-    def check_yes_no(self, option, name):
-        if option == -1:
-            exit_config_error(self.path_config_file, self.section, "'%s' should be {yes, no}" % name, exitnow=True)
-
     def check_mandatory_options(self):
         self.check_mandatory(self.enabled)
         self.check_mandatory(self.name)
@@ -665,11 +561,6 @@ class Backuptask:
         self.check_mandatory(self.skip_if_directory_nonexistent)
         self.check_mandatory(self.include_dirs)
         self.check_mandatory(self.path_result_dir)
-        self.check_yes_no(self.enabled, "enabled")
-        self.check_yes_no(self.followsym, "followsym")
-        self.check_yes_no(self.withpath, "withpath")
-        self.check_yes_no(self.skip_if_permission_fail, "skip_if_permission_fail")
-        self.check_yes_no(self.skip_if_directory_nonexistent, "skip_if_directory_nonexistent")
 
     @staticmethod
     def get_skip_task_string(task):
@@ -990,7 +881,7 @@ class Backupy:
         self.validate = False
         self.path_home = os.path.expanduser("~")
         self.path_default_configdir = os.path.join(self.path_home, '.config/backupy')
-        self.path_default_config_file = os.path.join(self.path_default_configdir, 'default.cfg')
+        self.path_default_config_file = os.path.join(self.path_default_configdir, 'default.toml')
         self.backupset_list = []
         self.path_config_files = []
 
@@ -1033,56 +924,48 @@ class Backupy:
     def show_manual(self):
         print("backupy v" + __version__ + "\n\n"
               "Start methods\n"
-              "   ./backupy.py                       # a.) at first run, generates default backup set config file\n"
-              "                                      # b.) if exists, starts with default backup set config file (~/.local/backupy/default.cfg)\n"
-              "   ./backupy.py -s /foo/mybackup.cfg  # starts with custom backup set config file\n"
-              "   ./backupy.py -s /foo/mybackup.cfg /bar/mysecond.cfg /boo/mythird.cfg\n"
-              "                                      # starts with 3 config files for 3 different backup sets\n"
-              "   ./backupy.py --validate -s /foo/mybackup.cfg /bar/mysecond.cfg\n"
-              "                                      # only validates config files, doesn't execute backup sets\n"
-              "   ./backupy.py --manual              # this short manual\n\n"
+              "   ./backupy.py                        # a.) at first run, generates default backup set config file\n"
+              "                                       # b.) if exists, starts with default config (~/.config/backupy/default.toml)\n"
+              "   ./backupy.py -s /foo/mybackup.toml  # starts with custom backup set config file\n"
+              "   ./backupy.py -s /foo/my.toml /bar/second.toml /boo/third.toml\n"
+              "                                       # starts with 3 config files for 3 different backup sets\n"
+              "   ./backupy.py --validate -s /foo/mybackup.toml /bar/second.toml\n"
+              "                                       # only validates config files, doesn't execute backup sets\n"
+              "   ./backupy.py --manual               # this short manual\n\n"
               "Summary:\n"
-              "   - backupy handles backup sets - represented by .cfg files\n"
-              "   - every backups set is built up from backup tasks [BACKUPx] sections below\n"
-              "   - you can enable/disable backup sets and backups tasks below them by 'enabled' parameter in config file \n"
-              "   - \n"
-              "Example for config file\n"
-              "   [META]\n"
-              "   name = My backup set                 # name of the backup set represented by this config file\n"
-              "   description = For relaxed days :)    # Free text about this backup set, its purpose, etc.\n"
-              "   enabled = yes                        # is this backup set enabled (or skipped)\n\n"
-              "   [GLOBAL_EXCLUDES]                    # excludes that apply to all [BACKUPx] tasks\n"
-              "                                          you can change options' values, but don't modify section name and option names!\n"
-              "   exclude_files = Thumbs.db, temp.txt  # list of globally excluded filenames\n"
-              "   exclude_endings = ~, swp             # list of globally excluded file extension types\n"
-              "   exclude_dir_names = trash, garbage   # list of globally excluded directory names without path\n\n"
-              "   [BACKUP1]                            # Mandatory name pattern: BACKUP[1-99] (99 max) ; don't write anything after the number\n"
-              "  *name = My Document backup            # write backup task name here\n"
-              "  *enabled = yes                        # is this backup active. {yes, no}\n"
-              "  *create_target_date_dir = yes         # Creates subdir in target dir from date in format: YYYY-MM-DD\n"
-              "  *archive_name = document_backup       # archive file name without extension\n"
-              "  *path_result_dir = /home/joe/backup   # Where to create the archive file\n"
-              "  *method = targz                       # Compression method {tar, targz, tarbz2, zip}\n"
-              "  *followsym = yes                      # Should compressor follow symlinks\n"
-              "  *withpath = no                        # compress files with or without full path\n"
-              "  *skip_if_permission_fail = no         # skips backup task if there is/are file(s) with no access by running user\n"
-              "  *skip_if_directory_nonexistent = no   # skips backup task if there is/are non-existent include_dir\n"
-              "  *include_dir1 = /home/joe/humour      # included directory 1. (at least one is mandatory)\n"
-              "   include_dir2 = /home/joe/novels      # included directory 2.\n"
-              "   inlcude_dirN = ... \n"
-              "   ... \n"
-              "   exclude_dir_names = garbage, temp    # list of excluded directory names without path\n"
-              "   exclude_dir_fullpath1 = /home/joe/humour/saskabare   # exclude directory 1. Not mandatory.\n"
-              "   exclude_dir_fullpath2 = /home/joe/novels/bad_ones\n"
-              "   exclude_dir_fullpathN = ...\n"
-              "   ...\n"
-              "   exclude_endings = ~, gif, jpg, bak   # list of excluded file extension types\n"
-              "   exclude_files = abc.log, Thumbs.db   # list of excluded filenames\n\n"
-              "   * Mandatory options\n\n"
-              "Tip 1: Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n"
-              "Tip 2: use of comment sign '#' is allowed - at the end of option lines\n"
-              "Tip 3: 'exclude_endings' special case: '~'  It excludes file endings like 'myfile.doc~'  (NOT myfile.~) \n"
-              "Tip 4: 'exclude_dir_names' are active only _below_ the included directory's root path\n")
+              "   - backupy handles backup sets - represented by .toml files\n"
+              "   - every backup set is built up from [[backup]] task entries\n"
+              "   - you can enable/disable backup sets and tasks via 'enabled' (true/false)\n\n"
+              "Example config file (TOML format)\n"
+              "   [meta]\n"
+              "   name = \"My backup set\"               # name of the backup set\n"
+              "   description = \"For relaxed days :)\"   # free text description\n"
+              "   enabled = true                        # is this backup set enabled\n\n"
+              "   [global_excludes]\n"
+              "   endings = [\"~\", \".swp\"]               # globally excluded file extensions\n"
+              "   files = [\"Thumbs.db\", \"temp.txt\"]     # globally excluded filenames\n"
+              "   dir_names = [\"trash\", \"garbage\"]      # globally excluded directory names\n\n"
+              "   [[backup]]                            # each [[backup]] is one backup task (unlimited)\n"
+              "   name = \"My Document backup\"           # backup task name\n"
+              "   enabled = true                        # is this backup active\n"
+              "   create_target_date_dir = true         # creates YYYY-MM-DD subdir in result_dir\n"
+              "   archive_name = \"document_backup\"      # archive file name without extension\n"
+              "   result_dir = \"/home/joe/backup\"       # where to create the archive file\n"
+              "   method = \"targz\"                      # compression method: tar, targz, tarbz2, zip\n"
+              "   followsym = true                      # should compressor follow symlinks\n"
+              "   withpath = false                      # compress files with or without full path\n"
+              "   skip_if_permission_fail = false       # skip task if file(s) are unreadable\n"
+              "   skip_if_directory_nonexistent = false  # skip task if include_dirs don't exist\n"
+              "   include_dirs = [\"/home/joe/humour\", \"/home/joe/novels\"]  # at least one mandatory\n"
+              "   exclude_dir_names = [\"garbage\", \"temp\"]\n"
+              "   exclude_dir_fullpaths = [\"/home/joe/humour/saskabare\"]\n"
+              "   exclude_endings = [\"~\", \".gif\", \".jpg\", \".bak\"]\n"
+              "   exclude_files = [\"abc.log\", \"Thumbs.db\"]\n\n"
+              "Tips:\n"
+              "   - Set 'enabled = true' for backup sets and tasks you want active\n"
+              "   - Comments with '#' are supported natively in TOML\n"
+              "   - 'exclude_endings' special case: '~' excludes files like 'myfile.doc~'\n"
+              "   - 'exclude_dir_names' are active only below the included directory's root path\n")
         if not os.path.exists(self.path_default_config_file):
             printWarning("You did not run backupy init yet.")
             printWarning("Just run ./backupy.py and let it create default config for you.\n")
@@ -1093,68 +976,13 @@ class Backupy:
         printLog("Elapsed time: {:0>2}:{:0>2}:{:02.0f}".format(int(hours), int(minutes), seconds), 1)
 
     def create_config_file(self):
-        filehandler = ""
-        cfghandler = configparser.ConfigParser(dict_type=OrderedDict)
-
-        cfghandler.read_dict(
-            OrderedDict((
-                ('META',
-                 OrderedDict((
-                     ('name', 'My backup set'),
-                     ('description', 'Free text about this backup set, its purpose, etc.'),
-                     ('enabled', 'yes')
-                 ))
-                 ),
-            ))
-        )
-
-        cfghandler.read_dict(
-            OrderedDict((
-                ('GLOBAL_EXCLUDES',
-                 OrderedDict((
-                     ('exclude_endings', '~, swp'),
-                     ('exclude_files', 'Thumbs.db, abcdefgh.txt'),
-                     ('exclude_dir_names', 'my_globaly_exclude_dir')
-                 ))
-                 ),
-            ))
-        )
-
-        for i in range(1, 4):
-            cfghandler.read_dict(
-                OrderedDict((
-                    ('BACKUP' + str(i),
-                     OrderedDict((
-                         ('name', 'Document backup' + str(i) + '           # comments are allowed'),
-                         ('enabled', 'no'),
-                         ('archive_name', 'document_backup' + str(i)),
-                         ('result_dir', '/home/joe/mybackups'),
-                         ('create_target_date_dir', 'yes'),
-                         ('method', 'tarbz2'),
-                         ('followsym', 'yes'),
-                         ('withpath', 'no'),
-                         ('skip_if_permission_fail', 'no'),
-                         ('skip_if_directory_nonexistent', 'no'),
-                         ('include_dir1', '/home/joe/humour                # at least one is mandatory'),
-                         ('include_dir2', '/home/joe/novels'),
-                         ('exclude_dir_names', 'garbage, temp'),
-                         ('exclude_dir_fullpath', '/home/joe/humour/saskabare, /home/joe / novels / bad_ones'),
-                         ('exclude_endings', '~, gif, jpg, bak'),
-                         ('exclude_files', 'abc.log, swp.db')
-                     ))
-                     ),
-                ))
-            )
-
+        template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default.toml')
         try:
-            filehandler = open(self.path_default_config_file, "w")
-            cfghandler.write(filehandler, space_around_delimiters=True)
+            shutil.copy(template_path, self.path_default_config_file)
         except OSError as err:
             printError("Cannot create config file: %s" % self.path_default_config_file)
             printError("Error: %s" % err.strerror)
             sys.exit(1)
-        finally:
-            filehandler.close()
 
     def check_first_run(self):
         if not os.path.exists(self.path_home):
@@ -1178,7 +1006,7 @@ class Backupy:
             printLog(Backupy.simple_line)
             printLog("Now you can create user specified backup tasks in %s" % self.path_default_config_file)
             printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
-            printLog("Don't forget to set 'enabled' to 'yes' if you want a backup set or task to be active!\n")
+            printLog("Don't forget to set 'enabled = true' if you want a backup set or task to be active!\n")
             printWarning("Use 'backupy.py --help' for parameter help.")
             printWarning("Use 'backupy.py --manual' to show How-to page.\n")
             sys.exit(0)
