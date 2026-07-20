@@ -54,9 +54,9 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2026, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '1.2.0'
+__version__ = '2.0.0'
 __maintainer__ = 'Balint Fekete'
-__email__ = 'kaktusztea at_ protonmail dot_ ch'
+__email__ = 'kaktusztea at_ protonmail dot_ com'
 __status__ = 'Production'
 
 
