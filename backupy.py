@@ -386,12 +386,10 @@ class Backupset:
             exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
     def check_archivename_unique(self):
-        ll = [task for task in self.task_list if task.enabled]
-        for task in ll:
-            for task2 in ll:
-                if task.section != task2.section and ((task.archive_name == task2.archive_name and task.path_result_dir == task2.path_result_dir) or task.name == task2.name):
-                    return False
-        return True
+        enabled = [t for t in self.task_list if t.enabled]
+        names = [t.name for t in enabled]
+        archive_keys = [(t.path_result_dir, t.archive_name) for t in enabled]
+        return len(names) == len(set(names)) and len(archive_keys) == len(set(archive_keys))
 
     def has_active_backuptask(self):
         return any(task.enabled for task in self.task_list)
