@@ -39,7 +39,11 @@ import tarfile
 import zipfile
 import datetime
 import argparse
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    print("ERROR: Python 3.12+ is required (tomllib not available).")
+    sys.exit(1)
 from pathlib import Path
 try:
     import zlib
@@ -126,13 +130,6 @@ def get_unreadable_files_in_recursive_subdir(subdir, followsym):
             if check_if_file_is_unreadable(ffile):
                 lista.append(ffile)
     return lista
-
-
-def check_python_version():
-    if sys.version_info < (3, 12):
-        printError("Minimum python version: 3.12")
-        printError("Exiting")
-        sys.exit(1)
 
 
 def get_date():
@@ -770,7 +767,6 @@ Tips:
 
 
 def main(args):
-    check_python_version()
     backupy = Backupy(args)
     backupy.execute_backupsets()
 
