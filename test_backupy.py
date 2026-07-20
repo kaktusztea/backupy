@@ -87,9 +87,11 @@ class TestGetsubDirPath(unittest.TestCase):
         self.assertEqual(getsub_dir_path("/home/user/", "/home/user/docs/"),
                          "user/docs")
 
-    def test_non_absolute_returns_false(self):
-        self.assertFalse(getsub_dir_path("relative", "/absolute/path"))
-        self.assertFalse(getsub_dir_path("/absolute", "relative/path"))
+    def test_non_absolute_raises(self):
+        with self.assertRaises(ValueError):
+            getsub_dir_path("relative", "/absolute/path")
+        with self.assertRaises(ValueError):
+            getsub_dir_path("/absolute", "relative/path")
 
 
 class TestSizeofFmt(unittest.TestCase):

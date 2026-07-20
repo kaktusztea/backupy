@@ -80,7 +80,7 @@ def add_dot_for_endings(endinglist):
 
 def getsub_dir_path(root, longpath):
     if not root.startswith("/") or not longpath.startswith("/"):
-        return False
+        raise ValueError(f"getsub_dir_path: both paths must be absolute (got root={root!r}, longpath={longpath!r})")
     root = strip_dash_string_end(root)
     longpath = strip_dash_string_end(longpath)
 
@@ -121,12 +121,10 @@ def get_unreadable_files_in_recursive_subdir(subdir, followsym):
     for root, dirs, files in os.walk(subdir):
         for file in files:
             ffile = os.path.join(root, file)
-            if followsym:
-                if check_if_file_is_unreadable(ffile):
-                    lista.append(os.path.join(root, file))
-            else:
-                if check_if_file_is_unreadable(ffile) and not os.path.islink(ffile):
-                    lista.append(os.path.join(root, file))
+            if not followsym and os.path.islink(ffile):
+                continue
+            if check_if_file_is_unreadable(ffile):
+                lista.append(ffile)
     return lista
 
 
@@ -447,7 +445,7 @@ class Backuptask:
         self.configs_global = cglobal
 
         self.path_config_file = path_config_file
-        self.path_md5 = {}
+        self.path_md5 = ''
 
     @property
     def check_include_dir_dups(self):
@@ -472,10 +470,9 @@ class Backuptask:
         printLog(hash_result)
 
         # write hash to csv file: hash, filesize, filename
-        myfile = open(self.path_md5, 'a')
-        wr = csv.writer(myfile, delimiter=";")
-        wr.writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
-        myfile.close()
+        with open(self.path_md5, 'a') as myfile:
+            wr = csv.writer(myfile, delimiter=";")
+            wr.writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
 
     def _is_excluded(self, filenamefull, root_dir):
         """Returns True if the file should be excluded."""
@@ -663,9 +660,6 @@ class Backupy:
         if self.validate:
             printOK("All config files are valid. Wo-hoooo!")
             sys.exit(0)
-
-    def __del__(self):
-        pass
 
     def show_manual(self):
         print("backupy v" + __version__ + "\n\n"
