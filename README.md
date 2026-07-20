@@ -71,14 +71,14 @@ vi /my/path/mybackup.toml   (customize)
 ```
 ## Known issues ##
 * follow symlink does not work with zip compression (old zip standard doesn't support it, will try to hack it anyway :)
- 
+
 ## Planned features ##
 * exclude / include unique files
 
 * 7zip/lz support
 
 * META section
-  
+
 ```
    [meta]
    description = "This is my set for weekly data backup"
@@ -86,20 +86,13 @@ vi /my/path/mybackup.toml   (customize)
    creation_date = 2016-09-01
 ```
 
-
-* [HOME_CONFIGS] unique backup section
-
-* remote compression target (ssh, etc)
-
-* reserve and move n previous backups
-
-* comment file addition to archive (zip)
-
-* filelist file creation from archive - after compression
-
-* pre-calculate estimated file size → predict if free space will be enough or not
-
-* logging
+- [HOME_CONFIGS] unique backup section
+- remote compression target (ssh, etc)
+- reserve and move n previous backups
+- comment file addition to archive (zip)
+- filelist file creation from archive - after compression
+- pre-calculate estimated file size → predict if free space will be enough or not
+- logging
 
 
 ## Contact ##

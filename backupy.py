@@ -34,16 +34,16 @@ import csv
 import time
 import errno
 import shutil
-import ntpath
 import random
 import string
 import hashlib
 import tarfile
 import zipfile
 import datetime
-import platform
 import argparse
+import tempfile
 import tomllib
+from pathlib import Path
 try:
     import zlib
     zcompression = zipfile.ZIP_DEFLATED
@@ -52,7 +52,7 @@ except ImportError:
 
 # Globals
 __author__ = 'Balint Fekete'
-__copyright__ = 'Copyright 2018, Balint Fekete'
+__copyright__ = 'Copyright 2026, Balint Fekete'
 __license__ = 'GPLv3'
 __version__ = '1.2.0'
 __maintainer__ = 'Balint Fekete'
@@ -64,15 +64,6 @@ def strip_dash_string_end(line):
     while line.endswith("/"):
         line = line[:-1]
     return line
-
-
-def strip_dash_string_start(line):
-    while line.startswith("/"):
-        line = line[1:]
-    return line
-
-
-
 
 
 def strip_enddash_on_list(endinglist):
@@ -110,7 +101,7 @@ def filter_nonexistent_include_dirs(include_dirs):
     for index, dirpath in enumerate(include_dirs):
         if not os.path.exists(dirpath):
             remove_indexes.append(index)
-            printWarning("Include dir doesn't exist, skipping: %s" % str(dirpath))
+            printWarning(f"Include dir doesn't exist, skipping: {dirpath}")
     remove_indexes.sort(reverse=True)
     if remove_indexes:
         for index in remove_indexes:
@@ -122,8 +113,8 @@ def create_dir(path):
     try:
         os.makedirs(name=path, exist_ok=True)
     except OSError as err:
-        printError("Cannot create dir: %s" % path)
-        printError("(%s)" % err.strerror)
+        printError(f"Cannot create dir: {path}")
+        printError(f"({err.strerror})")
         return False
     return True
 
@@ -147,37 +138,22 @@ def get_unreadable_files_in_recursive_subdir(subdir, followsym):
 
 
 def check_python_version():
-    try:
-        assert sys.version_info >= (3, 4)
-    except AssertionError:
-        printError("Minimum python version: 3.4")
+    if sys.version_info < (3, 12):
+        printError("Minimum python version: 3.12")
         printError("Exiting")
         sys.exit(1)
 
 
-def get_leaf_from_path(path):
-    """ get filename only from path """
-    head, tail = ntpath.split(path)
-    return tail or ntpath.basename(head)
-
-
 def get_date():
-    now = datetime.datetime.now()
-    nowstr = '%04d-%02d-%02d' % (now.year, now.month, now.day)
-    return nowstr
+    return datetime.datetime.now().strftime('%Y-%m-%d')
 
 
 def get_time():
-    now = datetime.datetime.now()
-    nowstr = '[%02d:%02d:%02d]' % (now.hour, now.minute, now.second)
-    return nowstr
+    return datetime.datetime.now().strftime('[%H:%M:%S]')
 
 
 def get_time_short():
-    """ http://stackoverflow.com/a/1094933 """
-    now = datetime.datetime.now()
-    nowstr = '%02d%02d' % (now.hour, now.minute)
-    return nowstr
+    return datetime.datetime.now().strftime('%H%M')
 
 
 def get_random_string(length):
@@ -211,8 +187,8 @@ def printOK(log):
 
 
 def exit_config_error(config_file, section, comment, exitnow=True):
-    printError("%s" % config_file)
-    printError("[%s]" % section)
+    printError(f"{config_file}")
+    printError(f"[{section}]")
     if isinstance(comment, str):
         printError(comment)
     if isinstance(comment, list):
@@ -223,8 +199,8 @@ def exit_config_error(config_file, section, comment, exitnow=True):
 
 
 def print_config_warning(config_file, section, comment):
-    printWarning("%s" % config_file)
-    printWarning("[%s]" % section)
+    printWarning(f"{config_file}")
+    printWarning(f"[{section}]")
     if isinstance(comment, str):
         printWarning(comment)
     if isinstance(comment, list):
@@ -236,9 +212,9 @@ def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
+            return f"{num:3.1f} {unit}{suffix}"
         num /= 1024.0
-    return "%.1f%s%s" % (num, 'Yi', suffix)
+    return f"{num:.1f}Yi{suffix}"
 
 
 def get_dir_free_space(dirname):
@@ -279,12 +255,12 @@ class BackupyTarfile(tarfile.TarFile):
             import warnings
             warnings.warn("use the filter argument instead", DeprecationWarning, 2)
             if exclude(name):
-                self._dbg(2, "tarfile: Excluded %r" % name)
+                self._dbg(2, f"tarfile: Excluded {name!r}")
                 return
 
         # Skip if somebody tries to archive the archive...
         if self.name is not None and os.path.abspath(name) == self.name:
-            self._dbg(2, "tarfile: Skipped %r" % name)
+            self._dbg(2, f"tarfile: Skipped {name!r}")
             return
 
         self._dbg(1, name)
@@ -293,14 +269,14 @@ class BackupyTarfile(tarfile.TarFile):
         tarinfo = self.gettarinfo(name, arcname)
 
         if tarinfo is None:
-            self._dbg(1, "tarfile: Unsupported type %r" % name)
+            self._dbg(1, f"tarfile: Unsupported type {name!r}")
             return
 
         # Change or exclude the TarInfo object.
         if filter is not None:
             tarinfo = filter(tarinfo)
             if tarinfo is None:
-                self._dbg(2, "tarfile: Excluded %r" % name)
+                self._dbg(2, f"tarfile: Excluded {name!r}")
                 return
 
         # Append the tar header and data to the archive.
@@ -309,18 +285,17 @@ class BackupyTarfile(tarfile.TarFile):
                 with open(name, "rb") as f:
                     self.addfile(tarinfo, f)
             except PermissionError as err:
-                printWarning("Skip file (permission error): %s" % name)
+                printWarning(f"Skip file (permission error): {name}")
                 return
 
         elif tarinfo.isdir():
             self.addfile(tarinfo)
             if recursive:
                 try:
-                    # TODO: if it was the only dir included, then we shouldn't continue, just skip
                     for f in os.listdir(name):
                         self.add(os.path.join(name, f), os.path.join(arcname, f), recursive, exclude, filter=filter)
                 except PermissionError as err:
-                    printWarning("Skip directory (permission error): %s" % name)
+                    printWarning(f"Skip directory (permission error): {name}")
                     return
         else:
             self.addfile(tarinfo)
@@ -329,7 +304,7 @@ class BackupyTarfile(tarfile.TarFile):
 class Backupset:
     def __init__(self, config_file):
         if not os.path.exists(config_file):
-            printError("Config file does not exists: %s" % config_file)
+            printError(f"Config file does not exists: {config_file}")
             sys.exit(1)
         self.config_file = config_file
         self.name = ""
@@ -341,7 +316,7 @@ class Backupset:
         self.get_configs_meta()
         self.get_configs_global()
         self.get_configs_tasks()
-        printLog("Backup set config file is valid (%s): %s" % (self.name, self.config_file))
+        printLog(f"Backup set config file is valid ({self.name}): {self.config_file}")
 
     def __del__(self):
         pass
@@ -369,8 +344,8 @@ class Backupset:
             self.description = meta.get("description", "")
             self.enabled = meta["enabled"]
         except (tomllib.TOMLDecodeError, KeyError) as err:
-            printError("Backup set config file is invalid: %s" % self.config_file)
-            printError("%s" % str(err))
+            printError(f"Backup set config file is invalid: {self.config_file}")
+            printError(f"{err}")
             sys.exit(1)
 
     def get_configs_global(self):
@@ -382,12 +357,12 @@ class Backupset:
             self.g.exclude_files = list(glb.get("files", []))
             self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
         except (tomllib.TOMLDecodeError, KeyError) as err:
-            printError("Config file syntax error: %s" % self.config_file)
-            printError("%s" % str(err))
+            printError(f"Config file syntax error: {self.config_file}")
+            printError(f"{err}")
             sys.exit(1)
         except OSError as oerr:
-            printError("OSError: %s" % self.config_file)
-            printError("%s (%s)" % (oerr.strerror, str(oerr.errno)))
+            printError(f"OSError: {self.config_file}")
+            printError(f"{oerr.strerror} ({oerr.errno})")
             sys.exit(1)
 
     def get_configs_tasks(self):
@@ -397,7 +372,7 @@ class Backupset:
             backups = cfg.get("backup", [])
 
             for idx, section in enumerate(backups):
-                section_name = "backup[%d]" % idx
+                section_name = f"backup[{idx}]"
                 task = Backuptask(section_name, self.g, self.config_file)
                 task.section = section_name
                 task.enabled = section["enabled"]
@@ -421,36 +396,33 @@ class Backupset:
 
                 # archive_name
                 if check_string_contains_spaces(task.archive_name):
-                    comment = "Space in archive name is not allowed: %s" % task.archive_name
-                    exit_config_error(self.config_file, section_name, comment)
+                    exit_config_error(self.config_file, section_name, f"Space in archive name is not allowed: {task.archive_name}")
                 if task.archive_name.strip() == '':
-                    errmsg = "'archive_name' is mandatory."
-                    exit_config_error(self.config_file, section_name, errmsg)
+                    exit_config_error(self.config_file, section_name, "'archive_name' is mandatory.")
 
                 # include_dirs validation
                 for n, inclpath in enumerate(task.include_dirs):
                     if check_string_contains_spaces(inclpath):
-                        errmsg = "Space in include_dirs[%d] is not allowed" % n
-                        exit_config_error(self.config_file, section_name, errmsg)
+                        exit_config_error(self.config_file, section_name, f"Space in include_dirs[{n}] is not allowed")
 
                 # exclude_dir_fullpaths validation
                 for n, exclpath in enumerate(task.exclude_dir_fullpath):
                     if check_string_contains_spaces(exclpath):
-                        errmsg = "Space in exclude_dir_fullpaths[%d] is not allowed" % n
-                        exit_config_error(self.config_file, section_name, errmsg)
+                        exit_config_error(self.config_file, section_name, f"Space in exclude_dir_fullpaths[{n}] is not allowed")
 
-                if task.method == 'tar':
-                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar'
-                elif task.method == 'targz':
-                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.gz'
-                elif task.method == 'tarbz2':
-                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.tar.bz2'
-                elif task.method == 'zip':
-                    task.archive_name += '_' + get_date() + '_' + get_time_short() + '.zip'
-                else:
-                    comment = ["Wrong compression method declared (%s)" % task.method,
-                               "method = { tar ; targz ; tarbz2; zip}"]
-                    exit_config_error(self.config_file, section_name, comment)
+                match task.method:
+                    case 'tar':
+                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar"
+                    case 'targz':
+                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar.gz"
+                    case 'tarbz2':
+                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar.bz2"
+                    case 'zip':
+                        task.archive_name += f"_{get_date()}_{get_time_short()}.zip"
+                    case _:
+                        exit_config_error(self.config_file, section_name,
+                                          [f"Wrong compression method declared ({task.method})",
+                                           "method = { tar ; targz ; tarbz2; zip}"])
 
                 if task.enabled and task.create_target_date_dir:
                     task.path_result_dir = os.path.join(task.path_result_dir, date_today)
@@ -469,29 +441,30 @@ class Backupset:
                 exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
         except (tomllib.TOMLDecodeError, KeyError) as err:
-            printError("Invalid config file: %s" % self.config_file)
-            printError("%s" % str(err))
+            printError(f"Invalid config file: {self.config_file}")
+            printError(f"{err}")
             sys.exit(1)
 
     def execute(self):
         if not self.enabled:
-            printLog("Backup set \"%s\" is DISABLED --> SKIPPING" % self.name)
+            printLog(f"Backup set \"{self.name}\" is DISABLED --> SKIPPING")
             printLog(Backupy.double_line)
             return False
         if not self.has_active_backuptask():
             printLog(Backupy.simple_line)
-            printLog("You don't have any active backup task entries in %s" % self.config_file)
+            printLog(f"You don't have any active backup task entries in {self.config_file}")
             printLog("Exiting.")
             return False
         for task in self.task_list:
             if task.compress_pre():
                 printLog("Processing...")
-                if task.method == "tar" or task.method == "targz" or task.method == "tarbz2":
-                    task.compress_tar()
-                elif task.method == "zip":
-                    task.compress_zip()
-                else:
-                    printLog("Wrong method type in %s." % task.name)
+                match task.method:
+                    case "tar" | "targz" | "tarbz2":
+                        task.compress_tar()
+                    case "zip":
+                        task.compress_zip()
+                    case _:
+                        printLog(f"Wrong method type in {task.name}.")
         printLog(Backupy.double_line)
 
 
@@ -518,7 +491,7 @@ class Backuptask:
         self.configs_global = cglobal
 
         self.path_config_file = path_config_file
-        self.path_stash = os.path.join(self.get_temp_dir(), str(os.getpid()))
+        self.path_stash = os.path.join(tempfile.gettempdir(), str(os.getpid()))
         self.broken_syms = {}
         self.path_md5 = {}
 
@@ -526,18 +499,6 @@ class Backuptask:
         if os.path.exists(self.path_stash):
             printLog("Cleaning up")
             shutil.rmtree(self.path_stash)
-
-    def get_temp_dir(self):
-        if self.get_os() == "Linux":
-            return "/tmp/"
-        elif self.get_os() == "Darwin":
-            return "/tmp/"
-        elif self.get_os() == "Windows":
-            return "C:/Temp/"
-
-    @staticmethod
-    def get_os():
-        return platform.system()
 
     def check_mandatory(self, option):
         err = False
@@ -547,7 +508,7 @@ class Backuptask:
         elif str(self.enabled).strip() == "":
                 err = True
         if err:
-            raise Exception("'%s' is mandatory!" % option)
+            raise Exception(f"'{option}' is mandatory!")
 
     def check_mandatory_options(self):
         self.check_mandatory(self.enabled)
@@ -565,7 +526,7 @@ class Backuptask:
     @staticmethod
     def get_skip_task_string(task):
         if isinstance(task, str):
-            return "Skipping backup task '%s'" % task
+            return f"Skipping backup task '{task}'"
         else:
             raise Exception("get_skip_task_string(): didn't got str")
 
@@ -588,41 +549,41 @@ class Backuptask:
                 try:
                     os.makedirs(name=self.path_stash, mode=0o770, exist_ok=True)
                 except OSError as err:
-                    printError("Cannot create stash temp dir for broken symlinks: %s" % self.path_stash)
-                    printError("(%s)" % err.strerror)
+                    printError(f"Cannot create stash temp dir for broken symlinks: {self.path_stash}")
+                    printError(f"({err.strerror})")
                     sys.exit(1)
             return broken_list
         return False
 
     def stash_broken_symlinks(self, entry, syms):
         if syms and isinstance(syms, list):
-            printDebug("Stashing broken symlinks to %s for %s" % (self.path_stash, entry))
+            printDebug(f"Stashing broken symlinks to {self.path_stash} for {entry}")
             for sym in syms:
-                temp_target = os.path.join(self.path_stash, get_leaf_from_path(sym)) + '_' + get_random_string(7)
+                temp_target = os.path.join(self.path_stash, Path(sym).name) + '_' + get_random_string(7)
                 self.broken_syms[sym] = temp_target
                 try:
                     shutil.move(sym, temp_target)
                     # TODO: place a dummy file instead of broken symlink: BROKEN_SYMLINK_mybroken.txt
                     # TODO: Delete it at pop phase
                 except OSError as err:
-                    printError("Could not stash broken symlink: " + sym)
-                    printError("(%s)" % err.strerror)
+                    printError(f"Could not stash broken symlink: {sym}")
+                    printError(f"({err.strerror})")
             printDebug("Broken symlinks and their stash location pairs:")
             printDebug(self.broken_syms)
             if len(syms):
                 verb = 'was' if len(syms) == 1 else 'were'
-                printWarning("There " + verb + " " + str(len(syms)) + " (skipped) broken symlinks in " + entry)
+                printWarning(f"There {verb} {len(syms)} (skipped) broken symlinks in {entry}")
                 self.list_broken_symlinks()
 
     def pop_broken_symlinks(self):
         if self.broken_syms:
-            printDebug("Popping broken symlinks from %s for %s" % (self.path_stash, self.name))
+            printDebug(f"Popping broken symlinks from {self.path_stash} for {self.name}")
             for origin, temp_target in self.broken_syms.items():
                 try:
                     shutil.move(temp_target, origin)
                 except OSError as err:
-                    printError("Could not restore stashed broken symlink: " + origin)
-                    printError("(%s)" % err.strerror)
+                    printError(f"Could not restore stashed broken symlink: {origin}")
+                    printError(f"({err.strerror})")
             self.broken_syms.clear()
 
     def list_broken_symlinks(self):
@@ -647,7 +608,7 @@ class Backuptask:
         # write hash to csv file: hash, filesize, filename
         myfile = open(self.path_md5, 'a')
         wr = csv.writer(myfile, delimiter=";")
-        wr.writerow([hash_result, os.path.getsize(filepath), get_leaf_from_path(filepath)])
+        wr.writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
         myfile.close()
 
     def filter_general(self, item, root_dir=''):
@@ -665,50 +626,51 @@ class Backuptask:
 
         # exclude_endings; only Pycharm-PEP8 warning
         if filenamefull.endswith(tuple(self.exclude_endings)):
-            printDebug("Global exclude ending: %s" % filenamefull)
+            printDebug(f"Global exclude ending: {filenamefull}")
             return retval_skip
         elif filenamefull.endswith(tuple(self.exclude_endings)):
-            printDebug("User exclude ending: %s" % filenamefull)
+            printDebug(f"User exclude ending: {filenamefull}")
             return retval_skip
 
         #  exclude_files; only Pycharm-PEP8 warning
-        elif get_leaf_from_path(filenamefull) in self.exclude_files:
-            printDebug("Global exclude file: %s" % filenamefull)
+        elif Path(filenamefull).name in self.exclude_files:
+            printDebug(f"Global exclude file: {filenamefull}")
             return retval_skip
-        elif get_leaf_from_path(filenamefull) in self.exclude_files:
-            printDebug("User exclude file: %s" % filenamefull)
+        elif Path(filenamefull).name in self.exclude_files:
+            printDebug(f"User exclude file: {filenamefull}")
             return retval_skip
 
         # exclude_dir_names; only Pycharm-PEP8 warning
         ll = getsub_dir_path(root_dir, filenamefull)
         if any(dirname in ll.split("/") for dirname in self.configs_global.exclude_dir_names):
-            printDebug("Global exclude dir names matched at: %s" % filenamefull)
+            printDebug(f"Global exclude dir names matched at: {filenamefull}")
             return retval_skip
         if any(dirname in ll.split("/")[1:] for dirname in self.exclude_dir_names):
-            printDebug("User exclude dir names matched at: %s" % filenamefull)
+            printDebug(f"User exclude dir names matched at: {filenamefull}")
             return retval_skip
 
         # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
         if any(dirname in filenamefull for dirname in self.exclude_dir_fullpath):
-            printDebug("User exclude dir with fullpath matched at: %s" % filenamefull)
+            printDebug(f"User exclude dir with fullpath matched at: {filenamefull}")
             return retval_skip
 
         # No filtering occured, file can be passed to compressor
-        if mode == "zip":
-            return True
-        elif mode == "tar":
-            return item
-        else:
-            printError("filter_general(): Impossible return value.\n")
-            raise Exception("filter_general(): Impossible return value.")
+        match mode:
+            case "zip":
+                return True
+            case "tar":
+                return item
+            case _:
+                printError("filter_general(): Impossible return value.\n")
+                raise Exception("filter_general(): Impossible return value.")
 
     def compress_pre(self):
         """" Checks and prints backup entry processing """
         printLog(Backupy.simple_line)
         if not self.enabled:
-            printLog("Backup task \"%s\" is DISABLED --> SKIPPING" % self.name)
+            printLog(f"Backup task \"{self.name}\" is DISABLED --> SKIPPING")
             return False
-        printLog("Executing backup task: \"" + Colors.colorblue + self.name + Colors.colorreset + "\"")
+        printLog(f"Executing backup task: \"{Colors.colorblue}{self.name}{Colors.colorreset}\"")
         if self.method == "zip" and self.followsym:
             printWarning("'Method: zip' is incompatible with 'followsym = yes'. Zip compression is unable to follow symlink. Sad.")
             return False
@@ -721,20 +683,20 @@ class Backuptask:
             printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
             return False
         if not self.include_dirs:
-            printWarning("Backup task \"%s\" include_dir pathes are all invalid --> SKIPPING" % self.name)
+            printWarning(f"Backup task \"{self.name}\" include_dir pathes are all invalid --> SKIPPING")
             return False
         if os.path.isfile(self.archivefullpath):
             printWarning("There is already an archive with this name:")
-            printWarning("%s" % self.archivefullpath)
+            printWarning(f"{self.archivefullpath}")
             printWarning(self.get_skip_task_string(self.name))
             return False
         if self.skip_if_permission_fail:
-            printLog("Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: " + str(self.followsym) + ")")
+            printLog(f"Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: {self.followsym})")
             exit_flag = False
             for include_dir in self.include_dirs:
                 unreadable_files = get_unreadable_files_in_recursive_subdir(include_dir, self.followsym)
                 if unreadable_files:
-                    printWarning("Ureadeable files in " + include_dir + ":")
+                    printWarning(f"Ureadeable files in {include_dir}:")
                     printWarning(unreadable_files)
                     exit_flag = True
             if exit_flag:
@@ -742,28 +704,27 @@ class Backuptask:
                 return False
 
         if not os.path.isdir(self.path_result_dir):
-            comment = "Result directory does not exists: %s" % self.path_result_dir
-            exit_config_error(self.path_config_file, self.section, comment)
-        printLog("Creating archive: %s" % self.archivefullpath)
-        printLog("Compressing method: %s" % self.method)
-        printLog("Free space in target dir: %s" % get_dir_free_space(self.path_result_dir))
+            exit_config_error(self.path_config_file, self.section, f"Result directory does not exists: {self.path_result_dir}")
+        printLog(f"Creating archive: {self.archivefullpath}")
+        printLog(f"Compressing method: {self.method}")
+        printLog(f"Free space in target dir: {get_dir_free_space(self.path_result_dir)}")
         return True
 
     def compress_tar(self):
         """ Compressing with tar/targz method """
         archive = ""
         try:
-            mode = ""
-            if self.method == "tar":
-                mode = "w"
-            elif self.method == "targz":
-                mode = "w:gz"
-            elif self.method == "tarbz2":
-                mode = "w:bz2"
-            else:
-                comment = ["Wrong compression method declared (%s)" % self.method,
-                           "method = { tar ; targz ; tarbz2; zip}"]
-                exit_config_error(self.path_config_file, self.section, comment)  # TODO: class-ification
+            match self.method:
+                case "tar":
+                    mode = "w"
+                case "targz":
+                    mode = "w:gz"
+                case "tarbz2":
+                    mode = "w:bz2"
+                case _:
+                    exit_config_error(self.path_config_file, self.section,
+                                      [f"Wrong compression method declared ({self.method})",
+                                       "method = { tar ; targz ; tarbz2; zip}"])
 
             # http://stackoverflow.com/a/39321142/4325232
             archive = BackupyTarfile.open(name=self.archivefullpath, mode=mode, dereference=self.followsym)
@@ -786,18 +747,16 @@ class Backuptask:
                 sys.exit(1)
         except (IOError, OSError) as err:
             if err.errno == errno.EACCES:
-                printError("OSError: %s on %s" % (os.strerror(err.errno), self.archivefullpath))
+                printError(f"OSError: {os.strerror(err.errno)} on {self.archivefullpath}")
                 sys.exit(err.errno)
             if err.errno == errno.ENOSPC:
                 printError("OSError: No space on disk")
                 sys.exit(err.errno)
             if err.errno == errno.ENOENT:
-                # My ticket: http://stackoverflow.com/questions/39545741/python-tarfile-add-how-to-avoid-exception-in-case-of-follow-symlink-broken
-                # Broken symlink skipping is resolved by stashing
                 printError("OSError: broken symlink or can not find file")
                 sys.exit(err.errno)
             else:
-                printError("IOError/OSError: Unhandled exception: %s" % err.strerror)
+                printError(f"IOError/OSError: Unhandled exception: {err.strerror}")
                 sys.exit(99)
         finally:
             if isinstance(archive, BackupyTarfile):
@@ -806,25 +765,24 @@ class Backuptask:
 
         self.store_md5(self.archivefullpath)
         filesize = os.path.getsize(self.archivefullpath)
-        printOK("Done [%s]" % sizeof_fmt(filesize))
+        printOK(f"Done [{sizeof_fmt(filesize)}]")
 
     def compress_zip(self):
         """ Compressing with zip method """
         archive = ""
         try:
             archive = zipfile.ZipFile(file=self.archivefullpath, mode="w", compression=zcompression)
-            # archive.comment = self.description            # TODO: need to add description?
         except (IOError, OSError) as err:
             if archive:
                 archive.close()
             if err.errno == errno.EACCES:
-                printError("OSError: Can't write to this file: %s" % self.archivefullpath)
+                printError(f"OSError: Can't write to this file: {self.archivefullpath}")
                 sys.exit(err.errno)
             elif err.errno == errno.ENOSPC:
                 printError("IOError/OSError: No space on disk")
                 sys.exit(err.errno)
             else:
-                printError("IOError/OSError: Unhandled error: %s" % err.strerror)
+                printError(f"IOError/OSError: Unhandled error: {err.strerror}")
                 sys.exit(99)
 
         # filtering + adding procedure starts by walking through on every file path
@@ -836,7 +794,7 @@ class Backuptask:
                         file_fullpath = os.path.join(subdir, filename)
 
                         if self.check_if_symlink_broken(file_fullpath):
-                            printWarning("broken symlink (skip): %s" % file_fullpath)
+                            printWarning(f"broken symlink (skip): {file_fullpath}")
                             continue
 
                         try:
@@ -849,25 +807,25 @@ class Backuptask:
                                 sys.exit(1)
                         except (UnicodeEncodeError, IOError, OSError, PermissionError) as err:
                             if isinstance(err, UnicodeEncodeError):
-                                printWarning("Skip file (name encoding problem in dir): " + subdir)
+                                printWarning(f"Skip file (name encoding problem in dir): {subdir}")
                                 continue
                             if isinstance(err, PermissionError):
                                 try:
-                                    printWarning("Skip file (permission error): %s " % file_fullpath)
+                                    printWarning(f"Skip file (permission error): {file_fullpath}")
                                 except UnicodeEncodeError:
-                                    printWarning("Skip file (permission AND name encoding problem somewhere in dir): " + subdir)
+                                    printWarning(f"Skip file (permission AND name encoding problem somewhere in dir): {subdir}")
                                 continue
                             elif err.errno == errno.ENOENT:
-                                printLog("OSError: No such file or directory to compress: %s" % self.archivefullpath)
+                                printLog(f"OSError: No such file or directory to compress: {self.archivefullpath}")
                                 continue
                             else:
-                                printLog("Unhandled IOError/OSError: %s" % err.strerror)
+                                printLog(f"Unhandled IOError/OSError: {err.strerror}")
                                 continue
         if archive:
             archive.close()
             self.store_md5(self.archivefullpath)
         filesize = os.path.getsize(self.archivefullpath)
-        printOK("Done [%s]" % sizeof_fmt(filesize))
+        printOK(f"Done [{sizeof_fmt(filesize)}]")
 
 
 class Backupy:
@@ -973,27 +931,27 @@ class Backupy:
     def print_elapsed_time(self):
         hours, rem = divmod(time.time() - self.start_time, 3600)
         minutes, seconds = divmod(rem, 60)
-        printLog("Elapsed time: {:0>2}:{:0>2}:{:02.0f}".format(int(hours), int(minutes), seconds), 1)
+        printLog(f"Elapsed time: {int(hours):0>2}:{int(minutes):0>2}:{seconds:02.0f}", 1)
 
     def create_config_file(self):
         template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default.toml')
         try:
             shutil.copy(template_path, self.path_default_config_file)
         except OSError as err:
-            printError("Cannot create config file: %s" % self.path_default_config_file)
-            printError("Error: %s" % err.strerror)
+            printError(f"Cannot create config file: {self.path_default_config_file}")
+            printError(f"Error: {err.strerror}")
             sys.exit(1)
 
     def check_first_run(self):
         if not os.path.exists(self.path_home):
-            printError("Can not access home directory: %s" % self.path_home)
+            printError(f"Can not access home directory: {self.path_home}")
             sys.exit(1)
         if not os.path.exists(self.path_default_configdir):
             try:
                 os.makedirs(name=self.path_default_configdir, exist_ok=True)
             except OSError as err:
-                printError("Cannot create user config dir: %s" % self.path_default_configdir)
-                printError("(%s)" % err.strerror)
+                printError(f"Cannot create user config dir: {self.path_default_configdir}")
+                printError(f"({err.strerror})")
                 sys.exit(1)
         if not os.path.exists(self.path_default_config_file):
             if self.validate:
@@ -1001,10 +959,10 @@ class Backupy:
                 printError("You can create default config file by running backupy.py without parameteres.")
                 sys.exit(1)
             printLog("First run!")
-            printLog("Generating default config file: %s" % self.path_default_config_file)
+            printLog(f"Generating default config file: {self.path_default_config_file}")
             self.create_config_file()
             printLog(Backupy.simple_line)
-            printLog("Now you can create user specified backup tasks in %s" % self.path_default_config_file)
+            printLog(f"Now you can create user specified backup tasks in {self.path_default_config_file}")
             printLog("Also you can create custom user specified backup-set config file(s) - called as command line parameter.")
             printLog("Don't forget to set 'enabled = true' if you want a backup set or task to be active!\n")
             printWarning("Use 'backupy.py --help' for parameter help.")
@@ -1014,7 +972,7 @@ class Backupy:
     def execute_backupsets(self):
         for backupset in self.backupset_list:
             printLog(Backupy.double_line, 2)
-            printLog(Colors.colorblue + "Executing backup set: %s%s " % (backupset.name, Colors.colorreset))
+            printLog(f"{Colors.colorblue}Executing backup set: {backupset.name}{Colors.colorreset} ")
             printLog(Backupy.double_line)
             backupset.execute()
         self.print_elapsed_time()
