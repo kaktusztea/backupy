@@ -583,19 +583,15 @@ class Backuptask:
                     root_dir = os.path.dirname(entry)
                     archive.add(entry, arcname=arcname, filter=lambda x, r=root_dir: self.filter_general(x, r))
 
-        except (IOError, OSError) as err:
-            if err.errno == errno.EACCES:
-                printError(f"OSError: {os.strerror(err.errno)} on {self.archivefullpath}")
-                sys.exit(err.errno)
-            if err.errno == errno.ENOSPC:
-                printError("OSError: No space on disk")
-                sys.exit(err.errno)
-            if err.errno == errno.ENOENT:
-                printError("OSError: broken symlink or can not find file")
-                sys.exit(err.errno)
-            else:
-                printError(f"IOError/OSError: Unhandled exception: {err.strerror}")
-                sys.exit(99)
+        except OSError as err:
+            match err.errno:
+                case errno.ENOSPC:
+                    printError("No space on disk")
+                case errno.EACCES:
+                    printError(f"Permission denied: {self.archivefullpath}")
+                case _:
+                    printError(f"OSError: {err.strerror} ({self.archivefullpath})")
+            sys.exit(err.errno or 99)
 
         self.store_md5(self.archivefullpath)
         printOK(f"Done [{sizeof_fmt(os.path.getsize(self.archivefullpath))}]")
