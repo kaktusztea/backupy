@@ -71,10 +71,6 @@ def strip_enddash_on_list(endinglist):
     return endinglist
 
 
-def check_string_contains_spaces(line):
-    return " " in line
-
-
 def add_dot_for_endings(endinglist):
     for idx, elem in enumerate(endinglist):
         if not elem.startswith(".") and elem != "~":
@@ -191,16 +187,6 @@ def exit_config_error(config_file, section, comment, exitnow=True):
         sys.exit(1)
 
 
-def print_config_warning(config_file, section, comment):
-    printWarning(f"{config_file}")
-    printWarning(f"[{section}]")
-    if isinstance(comment, str):
-        printWarning(comment)
-    if isinstance(comment, list):
-        for line in comment:
-            printWarning(line)
-
-
 def sizeof_fmt(num, suffix='B'):
     """ returns with human readable byte size format """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -312,51 +298,15 @@ class Backupset:
         self.enabled = False
         self.task_list = []
         self.g = Configglobal()
-        # get configs
-        self.get_configs_meta()
-        self.get_configs_global()
-        self.get_configs_tasks()
+        # parse config
+        self._load_config()
         printLog(f"Backup set config file is valid ({self.name}): {self.config_file}")
 
-    def __del__(self):
-        pass
-
-    def check_archivename_unique(self):
-        ll = [task for task in self.task_list if task.enabled]
-        for task in ll:
-            for task2 in ll:
-                if task.section != task2.section and ((task.archive_name == task2.archive_name and task.path_result_dir == task2.path_result_dir) or task.name == task2.name):
-                    return False
-        return True
-
-    def has_active_backuptask(self):
-        for task in self.task_list:
-            if task.enabled:
-                return True
-        return False
-
-    def get_configs_meta(self):
+    def _load_config(self):
         try:
             with open(self.config_file, "rb") as f:
                 cfg = tomllib.load(f)
-            meta = cfg["meta"]
-            self.name = meta["name"]
-            self.description = meta.get("description", "")
-            self.enabled = meta["enabled"]
-        except (tomllib.TOMLDecodeError, KeyError) as err:
-            printError(f"Backup set config file is invalid: {self.config_file}")
-            printError(f"{err}")
-            sys.exit(1)
-
-    def get_configs_global(self):
-        try:
-            with open(self.config_file, "rb") as f:
-                cfg = tomllib.load(f)
-            glb = cfg.get("global_excludes", {})
-            self.g.exclude_endings = add_dot_for_endings(list(glb.get("endings", [])))
-            self.g.exclude_files = list(glb.get("files", []))
-            self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
-        except (tomllib.TOMLDecodeError, KeyError) as err:
+        except tomllib.TOMLDecodeError as err:
             printError(f"Config file syntax error: {self.config_file}")
             printError(f"{err}")
             sys.exit(1)
@@ -365,12 +315,26 @@ class Backupset:
             printError(f"{oerr.strerror} ({oerr.errno})")
             sys.exit(1)
 
-    def get_configs_tasks(self):
+        # [meta]
         try:
-            with open(self.config_file, "rb") as f:
-                cfg = tomllib.load(f)
-            backups = cfg.get("backup", [])
+            meta = cfg["meta"]
+            self.name = meta["name"]
+            self.description = meta.get("description", "")
+            self.enabled = meta["enabled"]
+        except KeyError as err:
+            printError(f"Backup set config file is invalid: {self.config_file}")
+            printError(f"Missing key: {err}")
+            sys.exit(1)
 
+        # [global_excludes]
+        glb = cfg.get("global_excludes", {})
+        self.g.exclude_endings = add_dot_for_endings(list(glb.get("endings", [])))
+        self.g.exclude_files = list(glb.get("files", []))
+        self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
+
+        # [[backup]]
+        try:
+            backups = cfg.get("backup", [])
             for idx, section in enumerate(backups):
                 section_name = f"backup[{idx}]"
                 task = Backuptask(section_name, self.g, self.config_file)
@@ -394,21 +358,9 @@ class Backupset:
 
                 date_today = get_date() if task.create_target_date_dir else ""
 
-                # archive_name
-                if check_string_contains_spaces(task.archive_name):
-                    exit_config_error(self.config_file, section_name, f"Space in archive name is not allowed: {task.archive_name}")
+                # archive_name validation
                 if task.archive_name.strip() == '':
                     exit_config_error(self.config_file, section_name, "'archive_name' is mandatory.")
-
-                # include_dirs validation
-                for n, inclpath in enumerate(task.include_dirs):
-                    if check_string_contains_spaces(inclpath):
-                        exit_config_error(self.config_file, section_name, f"Space in include_dirs[{n}] is not allowed")
-
-                # exclude_dir_fullpaths validation
-                for n, exclpath in enumerate(task.exclude_dir_fullpath):
-                    if check_string_contains_spaces(exclpath):
-                        exit_config_error(self.config_file, section_name, f"Space in exclude_dir_fullpaths[{n}] is not allowed")
 
                 match task.method:
                     case 'tar':
@@ -430,7 +382,6 @@ class Backupset:
                 task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
 
                 # checks
-                task.check_mandatory_options()
                 if not task.check_include_dir_dups:
                     exit_config_error(self.config_file, section_name, "'include_dirs' duplicates are not allowed.")
 
@@ -440,10 +391,21 @@ class Backupset:
             if not self.check_archivename_unique():
                 exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
-        except (tomllib.TOMLDecodeError, KeyError) as err:
+        except KeyError as err:
             printError(f"Invalid config file: {self.config_file}")
-            printError(f"{err}")
+            printError(f"Missing key: {err}")
             sys.exit(1)
+
+    def check_archivename_unique(self):
+        ll = [task for task in self.task_list if task.enabled]
+        for task in ll:
+            for task2 in ll:
+                if task.section != task2.section and ((task.archive_name == task2.archive_name and task.path_result_dir == task2.path_result_dir) or task.name == task2.name):
+                    return False
+        return True
+
+    def has_active_backuptask(self):
+        return any(task.enabled for task in self.task_list)
 
     def execute(self):
         if not self.enabled:
@@ -493,29 +455,6 @@ class Backuptask:
         self.path_config_file = path_config_file
         self.path_md5 = {}
 
-    def check_mandatory(self, option):
-        err = False
-        if isinstance(option, list):
-            if len(option) == 0 or option[0].strip() == "":
-                err = True
-        elif str(self.enabled).strip() == "":
-                err = True
-        if err:
-            raise Exception(f"'{option}' is mandatory!")
-
-    def check_mandatory_options(self):
-        self.check_mandatory(self.enabled)
-        self.check_mandatory(self.name)
-        self.check_mandatory(self.archive_name)
-        self.check_mandatory(self.method)
-        self.check_mandatory(self.followsym)
-        self.check_mandatory(self.path_result_dir)
-        self.check_mandatory(self.withpath)
-        self.check_mandatory(self.skip_if_permission_fail)
-        self.check_mandatory(self.skip_if_directory_nonexistent)
-        self.check_mandatory(self.include_dirs)
-        self.check_mandatory(self.path_result_dir)
-
     @property
     def check_include_dir_dups(self):
         return len(self.include_dirs) == len(set(self.include_dirs))
@@ -557,44 +496,39 @@ class Backuptask:
             mode = "tar"
             retval_skip = None
 
-        # exclude_endings; only Pycharm-PEP8 warning
-        if filenamefull.endswith(tuple(self.exclude_endings)):
-            printDebug(f"Global exclude ending: {filenamefull}")
-            return retval_skip
-        elif filenamefull.endswith(tuple(self.exclude_endings)):
-            printDebug(f"User exclude ending: {filenamefull}")
+        # exclude_endings (global + task-level merged)
+        all_endings = tuple(self.configs_global.exclude_endings + self.exclude_endings)
+        if all_endings and filenamefull.endswith(all_endings):
+            printDebug(f"Exclude ending matched: {filenamefull}")
             return retval_skip
 
-        #  exclude_files; only Pycharm-PEP8 warning
-        elif Path(filenamefull).name in self.exclude_files:
-            printDebug(f"Global exclude file: {filenamefull}")
-            return retval_skip
-        elif Path(filenamefull).name in self.exclude_files:
-            printDebug(f"User exclude file: {filenamefull}")
+        # exclude_files (global + task-level merged)
+        all_files = self.configs_global.exclude_files + self.exclude_files
+        if Path(filenamefull).name in all_files:
+            printDebug(f"Exclude file matched: {filenamefull}")
             return retval_skip
 
-        # exclude_dir_names; only Pycharm-PEP8 warning
+        # exclude_dir_names (global + task-level)
         ll = getsub_dir_path(root_dir, filenamefull)
         if any(dirname in ll.split("/") for dirname in self.configs_global.exclude_dir_names):
             printDebug(f"Global exclude dir names matched at: {filenamefull}")
             return retval_skip
         if any(dirname in ll.split("/")[1:] for dirname in self.exclude_dir_names):
-            printDebug(f"User exclude dir names matched at: {filenamefull}")
+            printDebug(f"Task exclude dir names matched at: {filenamefull}")
             return retval_skip
 
-        # exclude_dir_fullpath (only user exclude); only Pycharm-PEP8 warning
+        # exclude_dir_fullpath (task-level only)
         if any(dirname in filenamefull for dirname in self.exclude_dir_fullpath):
-            printDebug(f"User exclude dir with fullpath matched at: {filenamefull}")
+            printDebug(f"Exclude dir fullpath matched at: {filenamefull}")
             return retval_skip
 
-        # No filtering occured, file can be passed to compressor
+        # No filtering occurred, file can be passed to compressor
         match mode:
             case "zip":
                 return True
             case "tar":
                 return item
             case _:
-                printError("filter_general(): Impossible return value.\n")
                 raise Exception("filter_general(): Impossible return value.")
 
     def compress_pre(self):
@@ -726,11 +660,8 @@ class Backuptask:
                         try:
                             if self.withpath:
                                 archive.write(filename=file_fullpath, compress_type=zcompression)
-                            elif not self.withpath:
-                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
                             else:
-                                printError("Wrong 'withpath' config value! Should be \"yes\" / \"no\". Exiting.")
-                                sys.exit(1)
+                                archive.write(filename=file_fullpath, arcname=os.path.join(dirpart, filename), compress_type=zcompression)
                         except (UnicodeEncodeError, IOError, OSError, PermissionError) as err:
                             if isinstance(err, UnicodeEncodeError):
                                 printWarning(f"Skip file (name encoding problem in dir): {subdir}")
