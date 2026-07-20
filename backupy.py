@@ -662,50 +662,58 @@ class Backupy:
             sys.exit(0)
 
     def show_manual(self):
-        print("backupy v" + __version__ + "\n\n"
-              "Start methods\n"
-              "   ./backupy.py                        # a.) at first run, generates default backup set config file\n"
-              "                                       # b.) if exists, starts with default config (~/.config/backupy/default.toml)\n"
-              "   ./backupy.py -s /foo/mybackup.toml  # starts with custom backup set config file\n"
-              "   ./backupy.py -s /foo/my.toml /bar/second.toml /boo/third.toml\n"
-              "                                       # starts with 3 config files for 3 different backup sets\n"
-              "   ./backupy.py --validate -s /foo/mybackup.toml /bar/second.toml\n"
-              "                                       # only validates config files, doesn't execute backup sets\n"
-              "   ./backupy.py --manual               # this short manual\n\n"
-              "Summary:\n"
-              "   - backupy handles backup sets - represented by .toml files\n"
-              "   - every backup set is built up from [[backup]] task entries\n"
-              "   - you can enable/disable backup sets and tasks via 'enabled' (true/false)\n\n"
-              "Example config file (TOML format)\n"
-              "   [meta]\n"
-              "   name = \"My backup set\"               # name of the backup set\n"
-              "   description = \"For relaxed days :)\"   # free text description\n"
-              "   enabled = true                        # is this backup set enabled\n\n"
-              "   [global_excludes]\n"
-              "   endings = [\"~\", \".swp\"]               # globally excluded file extensions\n"
-              "   files = [\"Thumbs.db\", \"temp.txt\"]     # globally excluded filenames\n"
-              "   dir_names = [\"trash\", \"garbage\"]      # globally excluded directory names\n\n"
-              "   [[backup]]                            # each [[backup]] is one backup task (unlimited)\n"
-              "   name = \"My Document backup\"           # backup task name\n"
-              "   enabled = true                        # is this backup active\n"
-              "   create_target_date_dir = true         # creates YYYY-MM-DD subdir in result_dir\n"
-              "   archive_name = \"document_backup\"      # archive file name without extension\n"
-              "   result_dir = \"/home/joe/backup\"       # where to create the archive file\n"
-              "   method = \"targz\"                      # compression method: tar, targz, tarbz2, zip\n"
-              "   followsym = true                      # should compressor follow symlinks\n"
-              "   withpath = false                      # compress files with or without full path\n"
-              "   skip_if_permission_fail = false       # skip task if file(s) are unreadable\n"
-              "   skip_if_directory_nonexistent = false  # skip task if include_dirs don't exist\n"
-              "   include_dirs = [\"/home/joe/humour\", \"/home/joe/novels\"]  # at least one mandatory\n"
-              "   exclude_dir_names = [\"garbage\", \"temp\"]\n"
-              "   exclude_dir_fullpaths = [\"/home/joe/humour/saskabare\"]\n"
-              "   exclude_endings = [\"~\", \".gif\", \".jpg\", \".bak\"]\n"
-              "   exclude_files = [\"abc.log\", \"Thumbs.db\"]\n\n"
-              "Tips:\n"
-              "   - Set 'enabled = true' for backup sets and tasks you want active\n"
-              "   - Comments with '#' are supported natively in TOML\n"
-              "   - 'exclude_endings' special case: '~' excludes files like 'myfile.doc~'\n"
-              "   - 'exclude_dir_names' are active only below the included directory's root path\n")
+        print(f"""\
+backupy v{__version__}
+
+Start methods
+   ./backupy.py                        # a.) at first run, generates default backup set config file
+                                       # b.) if exists, starts with default config (~/.config/backupy/default.toml)
+   ./backupy.py -s /foo/mybackup.toml  # starts with custom backup set config file
+   ./backupy.py -s /foo/my.toml /bar/second.toml /boo/third.toml
+                                       # starts with 3 config files for 3 different backup sets
+   ./backupy.py --validate -s /foo/mybackup.toml /bar/second.toml
+                                       # only validates config files, doesn't execute backup sets
+   ./backupy.py --manual               # this short manual
+
+Summary:
+   - backupy handles backup sets - represented by .toml files
+   - every backup set is built up from [[backup]] task entries
+   - you can enable/disable backup sets and tasks via 'enabled' (true/false)
+
+Example config file (TOML format)
+   [meta]
+   name = "My backup set"               # name of the backup set
+   description = "For relaxed days :)"   # free text description
+   enabled = true                        # is this backup set enabled
+
+   [global_excludes]
+   endings = ["~", ".swp"]               # globally excluded file extensions
+   files = ["Thumbs.db", "temp.txt"]     # globally excluded filenames
+   dir_names = ["trash", "garbage"]      # globally excluded directory names
+
+   [[backup]]                            # each [[backup]] is one backup task (unlimited)
+   name = "My Document backup"           # backup task name
+   enabled = true                        # is this backup active
+   create_target_date_dir = true         # creates YYYY-MM-DD subdir in result_dir
+   archive_name = "document_backup"      # archive file name without extension
+   result_dir = "/home/joe/backup"       # where to create the archive file
+   method = "targz"                      # compression method: tar, targz, tarbz2, tarxz, zip
+   followsym = true                      # should compressor follow symlinks
+   withpath = false                      # compress files with or without full path
+   skip_if_permission_fail = false       # skip task if file(s) are unreadable
+   skip_if_directory_nonexistent = false  # skip task if include_dirs don't exist
+   include_dirs = ["/home/joe/humour", "/home/joe/novels"]  # at least one mandatory
+   exclude_dir_names = ["garbage", "temp"]
+   exclude_dir_fullpaths = ["/home/joe/humour/saskabare"]
+   exclude_endings = ["~", ".gif", ".jpg", ".bak"]
+   exclude_files = ["abc.log", "Thumbs.db"]
+
+Tips:
+   - Set 'enabled = true' for backup sets and tasks you want active
+   - Comments with '#' are supported natively in TOML
+   - 'exclude_endings' special case: '~' excludes files like 'myfile.doc~'
+   - 'exclude_dir_names' are active only below the included directory's root path
+""")
         if not os.path.exists(self.path_default_config_file):
             printWarning("You did not run backupy init yet.")
             printWarning("Just run ./backupy.py and let it create default config for you.\n")
