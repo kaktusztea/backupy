@@ -523,13 +523,6 @@ class Backuptask:
         self.check_mandatory(self.include_dirs)
         self.check_mandatory(self.path_result_dir)
 
-    @staticmethod
-    def get_skip_task_string(task):
-        if isinstance(task, str):
-            return f"Skipping backup task '{task}'"
-        else:
-            raise Exception("get_skip_task_string(): didn't got str")
-
     @property
     def check_include_dir_dups(self):
         return len(self.include_dirs) == len(set(self.include_dirs))
@@ -665,46 +658,50 @@ class Backuptask:
                 raise Exception("filter_general(): Impossible return value.")
 
     def compress_pre(self):
-        """" Checks and prints backup entry processing """
+        """Pre-flight checks before compression. Returns True if task can proceed."""
+        skip = f"Skipping backup task '{self.name}'"
         printLog(Backupy.simple_line)
+
         if not self.enabled:
             printLog(f"Backup task \"{self.name}\" is DISABLED --> SKIPPING")
             return False
+
         printLog(f"Executing backup task: \"{Colors.colorblue}{self.name}{Colors.colorreset}\"")
+
         if self.method == "zip" and self.followsym:
-            printWarning("'Method: zip' is incompatible with 'followsym = yes'. Zip compression is unable to follow symlink. Sad.")
+            printWarning("'Method: zip' is incompatible with 'followsym = true'. Zip cannot follow symlinks. Sad.")
             return False
+
         if not create_dir(self.path_result_dir):
-            self.enabled = False
-            printWarning(self.get_skip_task_string(self.name))
+            printWarning(skip)
             return False
+
         if filter_nonexistent_include_dirs(self.include_dirs) and self.skip_if_directory_nonexistent:
-            printWarning(self.get_skip_task_string(self.name))
-            printWarning("(Reason: skip_if_directory_nonexistent parameter was set)")
+            printWarning(f"{skip} (skip_if_directory_nonexistent is set)")
             return False
+
         if not self.include_dirs:
-            printWarning(f"Backup task \"{self.name}\" include_dir pathes are all invalid --> SKIPPING")
+            printWarning(f"{skip} (all include_dirs are invalid)")
             return False
+
         if os.path.isfile(self.archivefullpath):
-            printWarning("There is already an archive with this name:")
-            printWarning(f"{self.archivefullpath}")
-            printWarning(self.get_skip_task_string(self.name))
+            printWarning(f"Archive already exists: {self.archivefullpath}")
+            printWarning(skip)
             return False
+
         if self.skip_if_permission_fail:
-            printLog(f"Pre-flight permission checks (Skip_If_Permission_Fail: True, FollowSymlinks: {self.followsym})")
-            exit_flag = False
+            printLog(f"Pre-flight permission checks (followsym: {self.followsym})")
+            unreadable_found = False
             for include_dir in self.include_dirs:
                 unreadable_files = get_unreadable_files_in_recursive_subdir(include_dir, self.followsym)
                 if unreadable_files:
-                    printWarning(f"Ureadeable files in {include_dir}:")
+                    printWarning(f"Unreadable files in {include_dir}:")
                     printWarning(unreadable_files)
-                    exit_flag = True
-            if exit_flag:
-                printWarning(self.get_skip_task_string(self.name))
+                    unreadable_found = True
+            if unreadable_found:
+                printWarning(skip)
                 return False
 
-        if not os.path.isdir(self.path_result_dir):
-            exit_config_error(self.path_config_file, self.section, f"Result directory does not exists: {self.path_result_dir}")
         printLog(f"Creating archive: {self.archivefullpath}")
         printLog(f"Compressing method: {self.method}")
         printLog(f"Free space in target dir: {get_dir_free_space(self.path_result_dir)}")
