@@ -437,7 +437,6 @@ class Backuptask:
         self.configs_global = cglobal
 
         self.path_config_file = path_config_file
-        self.path_md5 = ''
 
     @property
     def check_include_dir_dups(self):
@@ -448,23 +447,17 @@ class Backuptask:
         return os.path.islink(path) and not os.path.exists(path)
 
     def store_md5(self, filepath):
-        self.path_md5 = os.path.join(self.path_result_dir, "md5.sum")
-        if not os.path.exists(filepath):
-            return False
-
-        # generate hash
         printLog("Generating hash")
         hash_value = hashlib.md5()
-        with open(filepath, "rb") as hash_handler:
-            for chunk in iter(lambda: hash_handler.read(2 ** 20), b''):
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(2 ** 20), b''):
                 hash_value.update(chunk)
         hash_result = hash_value.hexdigest()
         printLog(hash_result)
 
-        # write hash to csv file: hash, filesize, filename
-        with open(self.path_md5, 'a') as myfile:
-            wr = csv.writer(myfile, delimiter=";")
-            wr.writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
+        md5_path = os.path.join(self.path_result_dir, "md5.sum")
+        with open(md5_path, 'a') as f:
+            csv.writer(f, delimiter=";").writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
 
     def _is_excluded(self, filenamefull, root_dir):
         """Returns True if the file should be excluded."""
