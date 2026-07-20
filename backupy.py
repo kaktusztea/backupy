@@ -303,6 +303,13 @@ class Backupset:
         printLog(f"Backup set config file is valid ({self.name}): {self.config_file}")
 
     def _load_config(self):
+        METHOD_EXTENSIONS = {
+            'tar': '.tar',
+            'targz': '.tar.gz',
+            'tarbz2': '.tar.bz2',
+            'zip': '.zip',
+        }
+
         try:
             with open(self.config_file, "rb") as f:
                 cfg = tomllib.load(f)
@@ -311,31 +318,25 @@ class Backupset:
             printError(f"{err}")
             sys.exit(1)
         except OSError as oerr:
-            printError(f"OSError: {self.config_file}")
+            printError(f"Cannot read config file: {self.config_file}")
             printError(f"{oerr.strerror} ({oerr.errno})")
             sys.exit(1)
 
-        # [meta]
         try:
+            # [meta]
             meta = cfg["meta"]
             self.name = meta["name"]
             self.description = meta.get("description", "")
             self.enabled = meta["enabled"]
-        except KeyError as err:
-            printError(f"Backup set config file is invalid: {self.config_file}")
-            printError(f"Missing key: {err}")
-            sys.exit(1)
 
-        # [global_excludes]
-        glb = cfg.get("global_excludes", {})
-        self.g.exclude_endings = add_dot_for_endings(list(glb.get("endings", [])))
-        self.g.exclude_files = list(glb.get("files", []))
-        self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
+            # [global_excludes]
+            glb = cfg.get("global_excludes", {})
+            self.g.exclude_endings = add_dot_for_endings(list(glb.get("endings", [])))
+            self.g.exclude_files = list(glb.get("files", []))
+            self.g.exclude_dir_names = strip_enddash_on_list(list(glb.get("dir_names", [])))
 
-        # [[backup]]
-        try:
-            backups = cfg.get("backup", [])
-            for idx, section in enumerate(backups):
+            # [[backup]]
+            for idx, section in enumerate(cfg.get("backup", [])):
                 section_name = f"backup[{idx}]"
                 task = Backuptask(section_name, self.g, self.config_file)
                 task.section = section_name
@@ -356,45 +357,33 @@ class Backupset:
                 task.exclude_endings = add_dot_for_endings(list(section.get("exclude_endings", [])))
                 task.exclude_files = list(section.get("exclude_files", []))
 
-                date_today = get_date() if task.create_target_date_dir else ""
-
-                # archive_name validation
+                # archive filename with timestamp + extension
                 if task.archive_name.strip() == '':
                     exit_config_error(self.config_file, section_name, "'archive_name' is mandatory.")
+                if task.method not in METHOD_EXTENSIONS:
+                    exit_config_error(self.config_file, section_name,
+                                      [f"Wrong compression method declared ({task.method})",
+                                       f"method = {{ {' ; '.join(METHOD_EXTENSIONS)} }}"])
+                task.archive_name += f"_{get_date()}_{get_time_short()}{METHOD_EXTENSIONS[task.method]}"
 
-                match task.method:
-                    case 'tar':
-                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar"
-                    case 'targz':
-                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar.gz"
-                    case 'tarbz2':
-                        task.archive_name += f"_{get_date()}_{get_time_short()}.tar.bz2"
-                    case 'zip':
-                        task.archive_name += f"_{get_date()}_{get_time_short()}.zip"
-                    case _:
-                        exit_config_error(self.config_file, section_name,
-                                          [f"Wrong compression method declared ({task.method})",
-                                           "method = { tar ; targz ; tarbz2; zip}"])
-
+                # result dir with optional date subdir
                 if task.enabled and task.create_target_date_dir:
-                    task.path_result_dir = os.path.join(task.path_result_dir, date_today)
+                    task.path_result_dir = os.path.join(task.path_result_dir, get_date())
 
                 task.archivefullpath = os.path.join(task.path_result_dir, task.archive_name)
 
-                # checks
                 if not task.check_include_dir_dups:
                     exit_config_error(self.config_file, section_name, "'include_dirs' duplicates are not allowed.")
 
                 self.task_list.append(task)
-                del task
-
-            if not self.check_archivename_unique():
-                exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
         except KeyError as err:
             printError(f"Invalid config file: {self.config_file}")
             printError(f"Missing key: {err}")
             sys.exit(1)
+
+        if not self.check_archivename_unique():
+            exit_config_error(self.config_file, "General error", "'result_dir' + 'archive_name' + 'method' combo and 'name' should be unique between enabled backup tasks!")
 
     def check_archivename_unique(self):
         ll = [task for task in self.task_list if task.enabled]
