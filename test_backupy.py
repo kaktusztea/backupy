@@ -652,7 +652,7 @@ class TestCompressTar(_CompressTestBase):
     def test_tar_md5_created(self):
         open(os.path.join(self.src, "file.txt"), "w").close()
         self._run_backup(self._make_config())
-        md5_file = os.path.join(self.out, "md5.sum")
+        md5_file = os.path.join(self.out, "_md5.sum")
         self.assertTrue(os.path.exists(md5_file))
         with open(md5_file) as f:
             content = f.read()
@@ -722,7 +722,7 @@ class TestCompressZip(_CompressTestBase):
     def test_zip_md5_created(self):
         open(os.path.join(self.src, "file.txt"), "w").close()
         self._run_backup(self._make_config(method="zip"))
-        md5_file = os.path.join(self.out, "md5.sum")
+        md5_file = os.path.join(self.out, "_md5.sum")
         self.assertTrue(os.path.exists(md5_file))
 
 

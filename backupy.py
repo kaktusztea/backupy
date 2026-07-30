@@ -457,7 +457,7 @@ class Backuptask:
         hash_result = hash_value.hexdigest()
         printLog(hash_result)
 
-        md5_path = os.path.join(self.path_result_dir, "md5.sum")
+        md5_path = os.path.join(self.path_result_dir, "_md5.sum")
         with open(md5_path, 'a') as f:
             csv.writer(f, delimiter=";").writerow([hash_result, os.path.getsize(filepath), Path(filepath).name])
 
