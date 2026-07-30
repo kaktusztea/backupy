@@ -201,7 +201,7 @@ class Colors:
     colorred = '\033[1;31m'
     colorreset = '\033[0m'
     coloryellow = '\033[0;93m'
-    colorblue = '\033[1;2;34m'
+    colorblue = '\033[1;96m'
     colorgreen = "\033[1;32m"
     colorbold = "\033[1m"
 
@@ -731,7 +731,7 @@ Tips:
         printLog(f"Elapsed time: {int(hours):0>2}:{int(minutes):0>2}:{seconds:02.0f}", 1)
 
     def create_config_file(self):
-        template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default.toml')
+        template_path = os.path.join(Path(__file__).resolve().parent, 'default.toml')
         try:
             shutil.copy(template_path, self.path_default_config_file)
         except OSError as err:
