@@ -896,5 +896,196 @@ exclude_files = []
         bs.execute()
 
 
+class TestIncludeFiles(_CompressTestBase):
+    """Tests for the include_files feature."""
+
+    def _make_config_files_only(self, method="tarbz2", withpath="false", files_list="[]"):
+        return f'''
+[meta]
+name = "files test"
+enabled = true
+
+[global_excludes]
+endings = []
+files = []
+dir_names = []
+
+[[backup]]
+name = "task1"
+enabled = true
+archive_name = "out"
+result_dir = "{self.out}"
+create_target_date_dir = false
+method = "{method}"
+followsym = false
+withpath = {withpath}
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = []
+include_files = {files_list}
+exclude_dir_names = []
+exclude_dir_fullpaths = []
+exclude_endings = []
+exclude_files = []
+'''
+
+    def _make_config_mixed(self, method="targz", withpath="false", files_list="[]"):
+        return f'''
+[meta]
+name = "mixed test"
+enabled = true
+
+[global_excludes]
+endings = []
+files = []
+dir_names = []
+
+[[backup]]
+name = "task1"
+enabled = true
+archive_name = "out"
+result_dir = "{self.out}"
+create_target_date_dir = false
+method = "{method}"
+followsym = false
+withpath = {withpath}
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = ["{self.src}"]
+include_files = {files_list}
+exclude_dir_names = []
+exclude_dir_fullpaths = []
+exclude_endings = []
+exclude_files = []
+'''
+
+    def test_tar_include_files_only(self):
+        """Task with only include_files (no include_dirs) should work."""
+        f1 = os.path.join(self.tmpdir, "a.txt")
+        f2 = os.path.join(self.tmpdir, "b.conf")
+        open(f1, "w").close()
+        open(f2, "w").close()
+        self._run_backup(self._make_config_files_only(
+            files_list=f'["{f1}", "{f2}"]'))
+        names = self._get_tar_contents()
+        self.assertIn("a.txt", names)
+        self.assertIn("b.conf", names)
+
+    def test_zip_include_files_only(self):
+        """Zip with only include_files should work."""
+        f1 = os.path.join(self.tmpdir, "x.txt")
+        open(f1, "w").close()
+        self._run_backup(self._make_config_files_only(
+            method="zip", files_list=f'["{f1}"]'))
+        names = self._get_zip_contents()
+        self.assertIn("x.txt", names)
+
+    def test_tar_mixed_dirs_and_files(self):
+        """Both include_dirs and include_files should be archived."""
+        open(os.path.join(self.src, "dir_file.txt"), "w").close()
+        extra = os.path.join(self.tmpdir, "extra.log")
+        open(extra, "w").close()
+        self._run_backup(self._make_config_mixed(
+            files_list=f'["{extra}"]'))
+        names = self._get_tar_contents()
+        self.assertTrue(any("dir_file.txt" in n for n in names))
+        self.assertIn("extra.log", names)
+
+    def test_zip_mixed_dirs_and_files(self):
+        """Zip with both dirs and files."""
+        open(os.path.join(self.src, "in_dir.txt"), "w").close()
+        extra = os.path.join(self.tmpdir, "standalone.dat")
+        open(extra, "w").close()
+        self._run_backup(self._make_config_mixed(
+            method="zip", files_list=f'["{extra}"]'))
+        names = self._get_zip_contents()
+        self.assertTrue(any("in_dir.txt" in n for n in names))
+        self.assertIn("standalone.dat", names)
+
+    def test_include_files_withpath_true(self):
+        """With withpath=true, files should keep full path."""
+        f1 = os.path.join(self.tmpdir, "keeper.txt")
+        open(f1, "w").close()
+        self._run_backup(self._make_config_files_only(
+            withpath="true", files_list=f'["{f1}"]'))
+        names = self._get_tar_contents()
+        self.assertTrue(any(n.endswith("keeper.txt") and "tmp" in n for n in names))
+
+    def test_include_files_withpath_false(self):
+        """With withpath=false, files should use basename only."""
+        f1 = os.path.join(self.tmpdir, "base.txt")
+        open(f1, "w").close()
+        self._run_backup(self._make_config_files_only(
+            files_list=f'["{f1}"]'))
+        names = self._get_tar_contents()
+        self.assertIn("base.txt", names)
+        self.assertFalse(any("tmp" in n for n in names))
+
+    def test_nonexistent_file_skipped(self):
+        """Nonexistent files should be skipped without crashing."""
+        f1 = os.path.join(self.tmpdir, "real.txt")
+        open(f1, "w").close()
+        self._run_backup(self._make_config_files_only(
+            files_list=f'["{f1}", "/tmp/nonexistent_xyz_backupy.fake"]'))
+        names = self._get_tar_contents()
+        self.assertIn("real.txt", names)
+
+    def test_symlink_stored_as_symlink(self):
+        """Symlinks in include_files should be stored as symlinks."""
+        target = os.path.join(self.tmpdir, "target.txt")
+        link = os.path.join(self.tmpdir, "mylink")
+        open(target, "w").close()
+        os.symlink(target, link)
+        self._run_backup(self._make_config_files_only(
+            files_list=f'["{link}"]'))
+        names = self._get_tar_contents()
+        self.assertIn("mylink", names)
+
+    def test_all_files_nonexistent_skips_task(self):
+        """If all include_files are invalid and no include_dirs, task should be skipped."""
+        path = self._write_config(self._make_config_files_only(
+            files_list='["/nonexistent_a", "/nonexistent_b"]'))
+        bs = Backupset(path)
+        bs.execute()
+        archives = [f for f in os.listdir(self.out) if not f.startswith('.')]
+        self.assertEqual(archives, [])
+
+    def test_include_files_not_affected_by_excludes(self):
+        """Exclude rules should NOT filter include_files (they are explicit)."""
+        f1 = os.path.join(self.tmpdir, "important.swp")
+        open(f1, "w").close()
+        cfg = f'''
+[meta]
+name = "test"
+enabled = true
+
+[global_excludes]
+endings = ["swp"]
+files = []
+dir_names = []
+
+[[backup]]
+name = "task1"
+enabled = true
+archive_name = "out"
+result_dir = "{self.out}"
+create_target_date_dir = false
+method = "targz"
+followsym = false
+withpath = false
+skip_if_permission_fail = false
+skip_if_directory_nonexistent = false
+include_dirs = []
+include_files = ["{f1}"]
+exclude_dir_names = []
+exclude_dir_fullpaths = []
+exclude_endings = []
+exclude_files = []
+'''
+        self._run_backup(cfg)
+        names = self._get_tar_contents()
+        self.assertIn("important.swp", names)
+
+
 if __name__ == '__main__':
     unittest.main()

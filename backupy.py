@@ -55,7 +55,7 @@ except ImportError:
 __author__ = 'Balint Fekete'
 __copyright__ = 'Copyright 2026, Balint Fekete'
 __license__ = 'GPLv3'
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 __maintainer__ = 'Balint Fekete'
 __email__ = 'kaktusztea at_ protonmail dot_ com'
 __status__ = 'Production'
@@ -347,7 +347,8 @@ class Backupset:
                 task.skip_if_permission_fail = section["skip_if_permission_fail"]
                 task.skip_if_directory_nonexistent = section["skip_if_directory_nonexistent"]
 
-                task.include_dirs = strip_enddash_on_list(list(section["include_dirs"]))
+                task.include_dirs = strip_enddash_on_list(list(section.get("include_dirs", [])))
+                task.include_files = list(section.get("include_files", []))
                 task.exclude_dir_fullpath = strip_enddash_on_list(list(section.get("exclude_dir_fullpaths", [])))
                 task.exclude_dir_names = strip_enddash_on_list(list(section.get("exclude_dir_names", [])))
                 task.exclude_endings = add_dot_for_endings(list(section.get("exclude_endings", [])))
@@ -430,6 +431,7 @@ class Backuptask:
         self.skip_if_permission_fail = False
         self.skip_if_directory_nonexistent = False
         self.include_dirs = []
+        self.include_files = []
         self.exclude_dir_fullpath = []
         self.exclude_dir_names = []
         self.exclude_endings = []
@@ -506,8 +508,17 @@ class Backuptask:
             printWarning(f"{skip} (skip_if_directory_nonexistent is set)")
             return False
 
-        if not self.include_dirs:
-            printWarning(f"{skip} (all include_dirs are invalid)")
+        # filter nonexistent include_files
+        valid_files = []
+        for f in self.include_files:
+            if os.path.exists(f) or os.path.islink(f):
+                valid_files.append(f)
+            else:
+                printWarning(f"Include file doesn't exist, skipping: {f}")
+        self.include_files = valid_files
+
+        if not self.include_dirs and not self.include_files:
+            printWarning(f"{skip} (no valid include_dirs or include_files)")
             return False
 
         if os.path.isfile(self.archivefullpath):
@@ -545,6 +556,9 @@ class Backuptask:
                     arcname = entry if self.withpath else os.path.basename(entry)
                     root_dir = os.path.dirname(entry)
                     archive.add(entry, arcname=arcname, filter=lambda x, r=root_dir: self.filter_tar(x, r))
+                for filepath in self.include_files:
+                    arcname = filepath if self.withpath else Path(filepath).name
+                    archive.add(filepath, arcname=arcname)
 
         except OSError as err:
             match err.errno:
@@ -583,6 +597,14 @@ class Backuptask:
                                 printWarning(f"Skip file (permission error): {file_fullpath}")
                             except OSError as err:
                                 printWarning(f"Skip file ({err.strerror}): {file_fullpath}")
+                for filepath in self.include_files:
+                    arcname = filepath if self.withpath else Path(filepath).name
+                    try:
+                        archive.write(filename=filepath, arcname=arcname)
+                    except PermissionError:
+                        printWarning(f"Skip file (permission error): {filepath}")
+                    except OSError as err:
+                        printWarning(f"Skip file ({err.strerror}): {filepath}")
 
         except OSError as err:
             match err.errno:
